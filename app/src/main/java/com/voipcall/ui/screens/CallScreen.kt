@@ -72,28 +72,32 @@ fun CallScreen(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Call duration (only show when connected)
-            if (callState == CallState.CONNECTED) {
+            // Call duration (show when outgoing or connected)
+            if (callState == CallState.CONNECTED || callState == CallState.OUTGOING) {
                 var callDuration by remember { mutableStateOf(0) }
 
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        kotlinx.coroutines.delay(1000)
-                        callDuration++
+                LaunchedEffect(callState) {
+                    if (callState == CallState.CONNECTED) {
+                        while (true) {
+                            kotlinx.coroutines.delay(1000)
+                            callDuration++
+                        }
                     }
                 }
 
-                Text(
-                    text = formatDuration(callDuration),
-                    fontSize = 18.sp,
-                    color = Color.Gray
-                )
+                if (callState == CallState.CONNECTED) {
+                    Text(
+                        text = formatDuration(callDuration),
+                        fontSize = 18.sp,
+                        color = Color.Gray
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
-            // Control buttons (only show when connected)
-            if (callState == CallState.CONNECTED) {
+            // Control buttons (show during outgoing and connected states)
+            if (callState == CallState.CONNECTED || callState == CallState.OUTGOING) {
                 // Audio controls row
                 Row(
                     modifier = Modifier

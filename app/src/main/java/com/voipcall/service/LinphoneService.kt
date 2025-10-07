@@ -4,7 +4,14 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothHeadset
+import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -22,6 +29,35 @@ class LinphoneService : Service() {
 
     private lateinit var core: Core
     private var currentVoiceType: VoiceType = VoiceType.NORMAL
+    private lateinit var audioManager: AudioManager
+    private var bluetoothHeadset: BluetoothHeadset? = null
+    private var isBluetoothConnected = false
+
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
+                    val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothProfile.STATE_DISCONNECTED)
+                    when (state) {
+                        BluetoothProfile.STATE_CONNECTED -> {
+                            Log.d(TAG, "Bluetooth headset connected")
+                            isBluetoothConnected = true
+                            routeAudioToBluetooth()
+                        }
+                        BluetoothProfile.STATE_DISCONNECTED -> {
+                            Log.d(TAG, "Bluetooth headset disconnected")
+                            isBluetoothConnected = false
+                            stopBluetoothSco()
+                        }
+                    }
+                }
+                BluetoothHeadset.ACTION_AUDIO_STATE_CHANGED -> {
+                    val state = intent.getIntExtra(BluetoothProfile.EXTRA_STATE, BluetoothHeadset.STATE_AUDIO_DISCONNECTED)
+                    Log.d(TAG, "Bluetooth audio state changed: $state")
+                }
+            }
+        }
+    }
 
     private val coreListener = object : CoreListenerStub() {
         override fun onCallStateChanged(
@@ -94,8 +130,12 @@ class LinphoneService : Service() {
         super.onCreate()
         Log.d(TAG, "Service created")
 
+        // Initialize AudioManager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+
         createNotificationChannel()
         initializeLinphone()
+        initializeBluetoothSupport()
 
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
@@ -377,9 +417,127 @@ class LinphoneService : Service() {
         }
     }
 
+    private fun initializeBluetoothSupport() {
+        try {
+            // Register Bluetooth broadcast receiver
+            val filter = IntentFilter().apply {
+                addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
+                addAction(BluetoothHeadset.ACTION_AUDIO_STATE_CHANGED)
+            }
+            registerReceiver(bluetoothReceiver, filter)
+
+            // Get Bluetooth adapter and set up headset profile
+            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+            if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+                bluetoothAdapter.getProfileProxy(this, object : BluetoothProfile.ServiceListener {
+                    override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+                        if (profile == BluetoothProfile.HEADSET) {
+                            bluetoothHeadset = proxy as BluetoothHeadset
+
+                            // Check if Bluetooth headset is already connected
+                            try {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    // For Android 12+, check permission first
+                                    if (checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT) ==
+                                        android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                                        val devices = bluetoothHeadset?.connectedDevices
+                                        if (devices?.isNotEmpty() == true) {
+                                            isBluetoothConnected = true
+                                            Log.d(TAG, "Bluetooth headset already connected: ${devices[0].name}")
+                                        }
+                                    }
+                                } else {
+                                    val devices = bluetoothHeadset?.connectedDevices
+                                    if (devices?.isNotEmpty() == true) {
+                                        isBluetoothConnected = true
+                                        Log.d(TAG, "Bluetooth headset already connected: ${devices[0].name}")
+                                    }
+                                }
+                            } catch (e: SecurityException) {
+                                Log.e(TAG, "Bluetooth permission not granted", e)
+                            }
+                        }
+                    }
+
+                    override fun onServiceDisconnected(profile: Int) {
+                        if (profile == BluetoothProfile.HEADSET) {
+                            bluetoothHeadset = null
+                        }
+                    }
+                }, BluetoothProfile.HEADSET)
+
+                Log.d(TAG, "Bluetooth support initialized")
+            } else {
+                Log.d(TAG, "Bluetooth not available or not enabled")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error initializing Bluetooth support", e)
+        }
+    }
+
+    private fun routeAudioToBluetooth() {
+        try {
+            if (isBluetoothConnected && core.currentCall != null) {
+                // Set audio mode for VoIP
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
+                // Start Bluetooth SCO (Synchronous Connection-Oriented) for audio
+                if (!audioManager.isBluetoothScoOn) {
+                    audioManager.startBluetoothSco()
+                    audioManager.isBluetoothScoOn = true
+                }
+
+                // Route audio to Bluetooth
+                audioManager.isSpeakerphoneOn = false
+
+                // Update Linphone to use Bluetooth device
+                val bluetoothDevice = core.audioDevices.firstOrNull {
+                    it.type == AudioDevice.Type.Bluetooth
+                }
+
+                if (bluetoothDevice != null) {
+                    core.currentCall?.outputAudioDevice = bluetoothDevice
+                    core.currentCall?.inputAudioDevice = bluetoothDevice
+                    Log.d(TAG, "Audio routed to Bluetooth: ${bluetoothDevice.deviceName}")
+                } else {
+                    Log.d(TAG, "Bluetooth audio routing via AudioManager SCO")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error routing audio to Bluetooth", e)
+        }
+    }
+
+    private fun stopBluetoothSco() {
+        try {
+            if (audioManager.isBluetoothScoOn) {
+                audioManager.stopBluetoothSco()
+                audioManager.isBluetoothScoOn = false
+                Log.d(TAG, "Bluetooth SCO stopped")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping Bluetooth SCO", e)
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         try {
+            // Unregister Bluetooth receiver
+            try {
+                unregisterReceiver(bluetoothReceiver)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering Bluetooth receiver", e)
+            }
+
+            // Stop Bluetooth SCO
+            stopBluetoothSco()
+
+            // Close Bluetooth profile proxy
+            bluetoothHeadset?.let {
+                BluetoothAdapter.getDefaultAdapter()?.closeProfileProxy(BluetoothProfile.HEADSET, it)
+            }
+
             core.removeListener(coreListener)
             core.stop()
             Log.d(TAG, "Service destroyed")
