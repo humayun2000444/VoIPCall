@@ -56,7 +56,7 @@ fun DialScreen(
                     .fillMaxWidth()
                     .padding(vertical = 32.dp),
                 textAlign = TextAlign.Center,
-                color = if (phoneNumber.isEmpty()) Color.Gray else Color.Black
+                color = if (phoneNumber.isEmpty()) Color.Gray else MaterialTheme.colorScheme.onSurface
             )
 
             Spacer(modifier = Modifier.weight(1f))

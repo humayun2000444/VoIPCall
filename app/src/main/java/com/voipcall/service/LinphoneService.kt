@@ -11,9 +11,17 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.voipcall.model.VoiceType
@@ -32,6 +40,30 @@ class LinphoneService : Service() {
     private lateinit var audioManager: AudioManager
     private var bluetoothHeadset: BluetoothHeadset? = null
     private var isBluetoothConnected = false
+    private lateinit var connectivityManager: ConnectivityManager
+    private var currentNetwork: Network? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var keepAliveRunnable: Runnable? = null
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            Log.d(TAG, "Network available: $network")
+            handleNetworkChange(network)
+        }
+
+        override fun onLost(network: Network) {
+            Log.d(TAG, "Network lost: $network")
+            if (currentNetwork == network) {
+                currentNetwork = null
+            }
+        }
+
+        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+            Log.d(TAG, "Network capabilities changed: $network")
+            handleNetworkChange(network)
+        }
+    }
 
     private val bluetoothReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -66,13 +98,24 @@ class LinphoneService : Service() {
             state: Call.State,
             message: String
         ) {
-            Log.d(TAG, "Call state changed: $state - $message")
+            Log.e(TAG, "========================================")
+            Log.e(TAG, "CALL STATE: $state")
+            Log.e(TAG, "MESSAGE: $message")
+            Log.e(TAG, "========================================")
 
             // Handle microphone settings based on call state
             when (state) {
                 Call.State.Connected -> {
+                    // Request audio focus for VoIP
+                    requestAudioFocus()
+
+                    // Configure audio mode for call
+                    configureAudioForCall()
+
                     // Ensure microphone is enabled when call connects
                     call.microphoneMuted = false
+                    core.isMicEnabled = true
+
                     Log.d(TAG, "Call connected - Mic muted: ${call.microphoneMuted}")
                     Log.d(TAG, "Core mic enabled: ${core.isMicEnabled}")
                     Log.d(TAG, "Output audio device: ${core.outputAudioDevice?.deviceName}")
@@ -85,26 +128,80 @@ class LinphoneService : Service() {
                     }
                 }
                 Call.State.StreamsRunning -> {
-                    // Ensure audio streams are active and mic is unmuted
+                    Log.e(TAG, "╔════════════════════════════════════════╗")
+                    Log.e(TAG, "║  STREAMS RUNNING - AUDIO SHOULD WORK  ║")
+                    Log.e(TAG, "╚════════════════════════════════════════╝")
+
+                    // CRITICAL: Force everything for audio transmission
                     call.microphoneMuted = false
-                    // Set microphone gain to maximum
-                    call.microphoneVolumeGain = 1.0f
+                    core.isMicEnabled = true
+                    call.microphoneVolumeGain = 2.0f  // Maximum gain
 
-                    Log.d(TAG, "Streams running - Mic muted: ${call.microphoneMuted}, Gain: ${call.microphoneVolumeGain}")
-                    Log.d(TAG, "Core mic enabled: ${core.isMicEnabled}")
-
-                    // Check audio stats and codec info
-                    call.audioStats?.let { stats ->
-                        Log.d(TAG, "Audio stats - Download bandwidth: ${stats.downloadBandwidth}, Upload bandwidth: ${stats.uploadBandwidth}")
+                    // Ensure audio mode is still correct
+                    if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
+                        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                        Log.e(TAG, "⚠️  Audio mode was reset, restored to MODE_IN_COMMUNICATION")
                     }
 
-                    // Log codec being used
-                    call.currentParams?.usedAudioPayloadType?.let { codec ->
-                        Log.d(TAG, "Audio codec in use: ${codec.mimeType}, Rate: ${codec.clockRate}")
-                    }
+                    // Start keep-alive to maintain audio stream
+                    startKeepAlive()
 
-                    // Log remote address for RTP
-                    Log.d(TAG, "Remote address: ${call.remoteAddress?.asStringUriOnly()}")
+                    Log.e(TAG, "🎤 Mic muted: ${call.microphoneMuted}")
+                    Log.e(TAG, "🎤 Mic gain: ${call.microphoneVolumeGain}")
+                    Log.e(TAG, "🎤 Core mic enabled: ${core.isMicEnabled}")
+                    Log.e(TAG, "🔊 Audio mode: ${audioManager.mode}")
+
+                    // Check audio stats and codec info - USE DELAYED CHECK
+                    mainHandler.postDelayed({
+                        try {
+                            call.audioStats?.let { stats ->
+                                Log.e(TAG, "═══ AUDIO STATS (after 2 sec) ═══")
+                                Log.e(TAG, "⬆️  Upload bandwidth: ${stats.uploadBandwidth} bps")
+                                Log.e(TAG, "⬇️  Download bandwidth: ${stats.downloadBandwidth} bps")
+                                Log.e(TAG, "📊 Jitter buffer: ${stats.jitterBufferSizeMs}ms")
+                                Log.e(TAG, "📉 Sender loss: ${stats.senderLossRate}%")
+                                Log.e(TAG, "📉 Receiver loss: ${stats.receiverLossRate}%")
+
+                                // CRITICAL WARNING if no upload
+                                if (stats.uploadBandwidth == 0.0f) {
+                                    Log.e(TAG, "")
+                                    Log.e(TAG, "❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌")
+                                    Log.e(TAG, "❌  ZERO UPLOAD - MIC DEAD  ❌")
+                                    Log.e(TAG, "❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌❌")
+                                    Log.e(TAG, "")
+                                } else {
+                                    Log.e(TAG, "✅ Audio is transmitting!")
+                                }
+                            }
+
+                            // Log codec being used
+                            call.currentParams?.usedAudioPayloadType?.let { codec ->
+                                Log.e(TAG, "🎵 Audio codec: ${codec.mimeType} @ ${codec.clockRate}Hz")
+                            }
+
+                            // Check audio direction
+                            call.currentParams?.let { params ->
+                                Log.e(TAG, "↔️  Audio direction: ${params.audioDirection}")
+                                if (params.audioDirection != MediaDirection.SendRecv) {
+                                    Log.e(TAG, "❌ WARNING: Audio direction is NOT SendRecv!")
+                                }
+                            }
+
+                            // Log addresses
+                            Log.e(TAG, "🌐 Remote: ${call.remoteAddress?.asStringUriOnly()}")
+                            Log.e(TAG, "🌐 Local: ${call.callLog?.fromAddress?.asStringUriOnly()}")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error checking audio stats", e)
+                        }
+                    }, 2000)
+                }
+                Call.State.End, Call.State.Released, Call.State.Error -> {
+                    // Stop keep-alive
+                    stopKeepAlive()
+
+                    // Release audio focus and restore audio mode
+                    releaseAudioFocus()
+                    restoreAudioMode()
                 }
                 else -> {}
             }
@@ -133,9 +230,13 @@ class LinphoneService : Service() {
         // Initialize AudioManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
+        // Initialize ConnectivityManager
+        connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
         createNotificationChannel()
         initializeLinphone()
         initializeBluetoothSupport()
+        registerNetworkCallback()
 
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
@@ -153,10 +254,29 @@ class LinphoneService : Service() {
             core.useInfoForDtmf = false
             core.useRfc2833ForDtmf = true
 
-            // Enable all available audio codecs
+            // Prioritize audio codecs for better quality
             core.audioPayloadTypes.forEach { codec ->
-                codec.enable(true)
-                Log.d(TAG, "Enabled codec: ${codec.mimeType}")
+                when (codec.mimeType.uppercase()) {
+                    "PCMU" -> {
+                        codec.enable(true)
+                        codec.normalBitrate = 64000
+                        Log.d(TAG, "Enabled codec (high priority): ${codec.mimeType}")
+                    }
+                    "PCMA" -> {
+                        codec.enable(true)
+                        codec.normalBitrate = 64000
+                        Log.d(TAG, "Enabled codec (high priority): ${codec.mimeType}")
+                    }
+                    "OPUS" -> {
+                        codec.enable(true)
+                        codec.normalBitrate = 48000
+                        Log.d(TAG, "Enabled codec: ${codec.mimeType}")
+                    }
+                    else -> {
+                        codec.enable(true)
+                        Log.d(TAG, "Enabled codec: ${codec.mimeType}")
+                    }
+                }
             }
 
             // Video disabled for VoIP
@@ -172,21 +292,37 @@ class LinphoneService : Service() {
             // Enable echo cancellation
             core.isEchoCancellationEnabled = true
 
+            // Adaptive rate control for varying network conditions
+            core.isAdaptiveRateControlEnabled = true
+
             // Set audio configuration for better quality
             core.setMediaEncryption(MediaEncryption.None)
 
             // Set audio port range for better NAT traversal
             core.setAudioPort(-1)  // Use random port
 
-            // Configure NAT policy - disable all NAT helpers for direct IP trunk
+            // Configure NAT policy - STUN only for fast, reliable connection
+            // ICE/TURN disabled to prevent call timeout
             val natPolicy = core.createNatPolicy()
+
+            // Enable STUN from provider for NAT traversal
+            natPolicy?.isStunEnabled = true
+            natPolicy?.stunServer = "iptsp.cosmocom.net:3478"
+
+            // Disable ICE and TURN - they cause call timeout
             natPolicy?.isIceEnabled = false
-            natPolicy?.isStunEnabled = false
             natPolicy?.isTurnEnabled = false
             natPolicy?.isUpnpEnabled = false
+
             core.natPolicy = natPolicy
 
-            Log.d(TAG, "NAT policy configured for direct IP trunking")
+            // Set session timer for keep-alive (refresh every 90 seconds)
+            core.incTimeout = 90
+
+            Log.d(TAG, "NAT policy configured with provider STUN")
+            Log.d(TAG, "STUN server: iptsp.cosmocom.net:3478")
+            Log.d(TAG, "ICE/TURN disabled for fast connection")
+            Log.d(TAG, "Audio configuration optimized for mobile networks")
 
             // Start core
             core.start()
@@ -254,6 +390,16 @@ class LinphoneService : Service() {
 
     private fun makeCall(number: String, username: String, serverIp: String, serverPort: Int) {
         try {
+            Log.d(TAG, "=== STARTING CALL SETUP ===")
+
+            // Request audio focus BEFORE making call
+            requestAudioFocus()
+
+            // Configure audio mode BEFORE making call
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            audioManager.isSpeakerphoneOn = false
+            Log.d(TAG, "Audio mode set to: ${audioManager.mode}")
+
             // Ensure microphone is enabled at core level
             core.isMicEnabled = true
             Log.d(TAG, "Core microphone enabled: ${core.isMicEnabled}")
@@ -283,37 +429,63 @@ class LinphoneService : Service() {
             if (address != null) {
                 val params = core.createCallParams(null)
                 if (params != null) {
+                    // CRITICAL: Ensure audio is enabled
                     params.isAudioEnabled = true
                     params.isVideoEnabled = false
 
-                    // Set audio direction to send and receive
+                    // CRITICAL: Set audio direction to SEND and RECEIVE
                     params.audioDirection = MediaDirection.SendRecv
 
                     // Enable early media for audio
                     params.isEarlyMediaSendingEnabled = true
 
+                    // Record audio enabled
+                    params.recordFile = null  // No recording, just ensure path is set
+
+                    Log.d(TAG, "Call params - Audio: ${params.isAudioEnabled}, Direction: ${params.audioDirection}")
+
                     val call = core.inviteAddressWithParams(address, params)
                     if (call != null) {
-                        // Ensure microphone is not muted on the call object
+                        // CRITICAL: Force microphone UNMUTED
                         call.microphoneMuted = false
-                        // Set microphone gain to ensure audio is captured
-                        call.microphoneVolumeGain = 1.0f
 
-                        Log.d(TAG, "Call initiated to $sipAddress")
-                        Log.d(TAG, "Mic muted: ${call.microphoneMuted}, Gain: ${call.microphoneVolumeGain}")
+                        // CRITICAL: Set microphone gain HIGHER
+                        call.microphoneVolumeGain = 2.0f
+
+                        // Force speaker gain as well
+                        call.speakerVolumeGain = 1.0f
+
+                        Log.d(TAG, "=== CALL INITIATED ===")
+                        Log.d(TAG, "To: $sipAddress")
+                        Log.d(TAG, "Mic muted: ${call.microphoneMuted}")
+                        Log.d(TAG, "Mic gain: ${call.microphoneVolumeGain}")
+                        Log.d(TAG, "Speaker gain: ${call.speakerVolumeGain}")
+                        Log.d(TAG, "Core mic enabled: ${core.isMicEnabled}")
                         Log.d(TAG, "Audio direction: ${params.audioDirection}")
-                        Log.d(TAG, "Early media enabled: ${params.isEarlyMediaSendingEnabled}")
+                        Log.d(TAG, "Early media: ${params.isEarlyMediaSendingEnabled}")
+                        Log.d(TAG, "Audio mode: ${audioManager.mode}")
+
+                        // Start aggressive microphone monitoring
+                        startAggressiveMicCheck(call)
                     } else {
                         Log.e(TAG, "Failed to create call")
+                        releaseAudioFocus()
+                        restoreAudioMode()
                     }
                 } else {
                     Log.e(TAG, "Failed to create call params")
+                    releaseAudioFocus()
+                    restoreAudioMode()
                 }
             } else {
                 Log.e(TAG, "Invalid SIP address: $sipAddress")
+                releaseAudioFocus()
+                restoreAudioMode()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error making call", e)
+            releaseAudioFocus()
+            restoreAudioMode()
         }
     }
 
@@ -333,14 +505,20 @@ class LinphoneService : Service() {
 
     private fun toggleMute() {
         try {
-            val currentlyMuted = !core.isMicEnabled
-            core.isMicEnabled = currentlyMuted
+            // Toggle mic enabled state
+            core.isMicEnabled = !core.isMicEnabled
+
+            // Also toggle on the call object
+            core.currentCall?.let { call ->
+                call.microphoneMuted = !core.isMicEnabled
+            }
 
             val intent = Intent("com.voipcall.MUTE_CHANGED")
-            intent.putExtra("muted", !currentlyMuted)
+            intent.putExtra("muted", !core.isMicEnabled)
             sendBroadcast(intent)
 
-            Log.d(TAG, "Mic ${if (!currentlyMuted) "muted" else "unmuted"}")
+            Log.d(TAG, "Mic ${if (core.isMicEnabled) "unmuted" else "muted"}")
+            Log.d(TAG, "Core mic enabled: ${core.isMicEnabled}")
         } catch (e: Exception) {
             Log.e(TAG, "Error toggling mute", e)
         }
@@ -520,9 +698,261 @@ class LinphoneService : Service() {
         }
     }
 
+    private fun registerNetworkCallback() {
+        try {
+            val networkRequest = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+
+            connectivityManager.registerNetworkCallback(networkRequest, networkCallback)
+
+            // Get current network
+            currentNetwork = connectivityManager.activeNetwork
+            Log.d(TAG, "Network callback registered, current network: $currentNetwork")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering network callback", e)
+        }
+    }
+
+    private fun handleNetworkChange(network: Network) {
+        try {
+            // Only handle if we have an active call and network actually changed
+            val activeCall = core.currentCall
+            if (activeCall != null && activeCall.state == Call.State.StreamsRunning) {
+                if (currentNetwork != null && currentNetwork != network) {
+                    Log.d(TAG, "Network changed during active call, refreshing session")
+
+                    // Update current network
+                    currentNetwork = network
+
+                    // Force Linphone to update network reachability
+                    core.setNetworkReachable(false)
+
+                    // Small delay to ensure network state is updated
+                    mainHandler.postDelayed({
+                        core.setNetworkReachable(true)
+
+                        // Trigger call update to refresh RTP streams
+                        try {
+                            val params = core.createCallParams(activeCall)
+                            if (params != null) {
+                                params.isAudioEnabled = true
+                                params.audioDirection = MediaDirection.SendRecv
+                                activeCall.update(params)
+                                Log.d(TAG, "Call update triggered for network change")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error updating call", e)
+                        }
+                    }, 500)
+                } else if (currentNetwork == null) {
+                    // First time setting network
+                    currentNetwork = network
+                    Log.d(TAG, "Initial network set: $network")
+                }
+            } else if (currentNetwork == null) {
+                currentNetwork = network
+                Log.d(TAG, "Network set (no active call): $network")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling network change", e)
+        }
+    }
+
+    private fun requestAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val audioAttributes = AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build()
+
+                audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(audioAttributes)
+                    .setAcceptsDelayedFocusGain(true)
+                    .setWillPauseWhenDucked(false)
+                    .build()
+
+                val result = audioManager.requestAudioFocus(audioFocusRequest!!)
+                Log.d(TAG, "Audio focus requested: ${if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) "granted" else "denied"}")
+            } else {
+                @Suppress("DEPRECATION")
+                val result = audioManager.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_VOICE_CALL,
+                    AudioManager.AUDIOFOCUS_GAIN
+                )
+                Log.d(TAG, "Audio focus requested: ${if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) "granted" else "denied"}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error requesting audio focus", e)
+        }
+    }
+
+    private fun releaseAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let {
+                    audioManager.abandonAudioFocusRequest(it)
+                    audioFocusRequest = null
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager.abandonAudioFocus(null)
+            }
+            Log.d(TAG, "Audio focus released")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing audio focus", e)
+        }
+    }
+
+    private fun configureAudioForCall() {
+        try {
+            // Set audio mode for VoIP communication
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
+            // Enable wired headset if connected
+            audioManager.isSpeakerphoneOn = false
+
+            // Ensure proper audio routing
+            if (!isBluetoothConnected) {
+                // Use earpiece for privacy unless speaker is explicitly toggled
+                val earpieceDevice = core.audioDevices.firstOrNull {
+                    it.type == AudioDevice.Type.Earpiece
+                }
+                earpieceDevice?.let {
+                    core.currentCall?.outputAudioDevice = it
+                }
+            }
+
+            Log.d(TAG, "Audio configured for call - Mode: ${audioManager.mode}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error configuring audio for call", e)
+        }
+    }
+
+    private fun restoreAudioMode() {
+        try {
+            audioManager.mode = AudioManager.MODE_NORMAL
+            audioManager.isSpeakerphoneOn = false
+            Log.d(TAG, "Audio mode restored to normal")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error restoring audio mode", e)
+        }
+    }
+
+    private fun startKeepAlive() {
+        stopKeepAlive()  // Clear any existing keep-alive
+
+        keepAliveRunnable = object : Runnable {
+            override fun run() {
+                try {
+                    core.currentCall?.let { call ->
+                        if (call.state == Call.State.StreamsRunning) {
+                            // Verify audio is still flowing
+                            call.audioStats?.let { stats ->
+                                Log.d(TAG, "Keep-alive check - Upload: ${stats.uploadBandwidth} bps, Download: ${stats.downloadBandwidth} bps")
+
+                                // If no audio is being transmitted, try to refresh
+                                if (stats.uploadBandwidth < 100) {
+                                    Log.w(TAG, "Low upload bandwidth detected, refreshing mic")
+                                    call.microphoneMuted = false
+                                    core.isMicEnabled = true
+                                    call.microphoneVolumeGain = 1.5f
+                                }
+                            }
+
+                            // Schedule next check
+                            mainHandler.postDelayed(this, 5000)  // Check every 5 seconds
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in keep-alive", e)
+                }
+            }
+        }
+
+        mainHandler.postDelayed(keepAliveRunnable!!, 5000)
+        Log.d(TAG, "Keep-alive started")
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveRunnable?.let {
+            mainHandler.removeCallbacks(it)
+            keepAliveRunnable = null
+            Log.d(TAG, "Keep-alive stopped")
+        }
+    }
+
+    private fun startAggressiveMicCheck(call: Call) {
+        // Immediately check and force mic settings every 2 seconds during first 30 seconds
+        var checkCount = 0
+        val aggressiveCheck = object : Runnable {
+            override fun run() {
+                try {
+                    if (call.state == Call.State.StreamsRunning || call.state == Call.State.Connected) {
+                        checkCount++
+
+                        // Force microphone settings
+                        call.microphoneMuted = false
+                        core.isMicEnabled = true
+                        call.microphoneVolumeGain = 2.0f
+
+                        // Check audio stats
+                        call.audioStats?.let { stats ->
+                            Log.d(TAG, "[MicCheck #$checkCount] Upload: ${stats.uploadBandwidth} bps")
+
+                            if (stats.uploadBandwidth == 0.0f) {
+                                Log.e(TAG, "[MicCheck #$checkCount] !!! ZERO UPLOAD - FORCING MIC !!!")
+
+                                // Try to force audio restart
+                                call.microphoneMuted = true
+                                mainHandler.postDelayed({
+                                    call.microphoneMuted = false
+                                    call.microphoneVolumeGain = 2.0f
+                                    Log.d(TAG, "Toggled mic to force restart")
+                                }, 100)
+                            } else {
+                                Log.d(TAG, "[MicCheck #$checkCount] Audio transmitting OK")
+                            }
+                        }
+
+                        // Continue checking for 30 seconds
+                        if (checkCount < 15) {
+                            mainHandler.postDelayed(this, 2000)
+                        } else {
+                            Log.d(TAG, "Aggressive mic check completed, transitioning to normal keep-alive")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in aggressive mic check", e)
+                }
+            }
+        }
+
+        mainHandler.postDelayed(aggressiveCheck, 1000)  // Start after 1 second
+        Log.d(TAG, "Started aggressive mic monitoring")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         try {
+            // Stop keep-alive
+            stopKeepAlive()
+
+            // Release audio focus
+            releaseAudioFocus()
+
+            // Restore audio mode
+            restoreAudioMode()
+
+            // Unregister network callback
+            try {
+                connectivityManager.unregisterNetworkCallback(networkCallback)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error unregistering network callback", e)
+            }
+
             // Unregister Bluetooth receiver
             try {
                 unregisterReceiver(bluetoothReceiver)
