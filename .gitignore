@@ -1,0 +1,61 @@
+# ===========================
+# Android / Kotlin Project
+# ===========================
+
+# Gradle
+.gradle/
+build/
+*/build/
+!gradle/wrapper/gradle-wrapper.jar
+gradle-app.setting
+
+# Local configuration
+local.properties
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Logs
+*.log
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Kotlin
+*.class
+*.ktlint-cache
+
+# Generated files
+captures/
+output.json
+
+# NDK / CMake / intermediates
+.cxx/
+.externalNativeBuild/
+
+# Misc
+*.apk
+*.ap_
+*.dex
+*.so
+*.orig
+*.rej
+
+# Android Test results
+test-output/
+androidTest-results/
+
+# Misc caches
+.cache/
+*.lock
+*.tmp
+
+# Jetpack Compose preview cache
+.compose-cache/
+
+# Temporary or experimental files
+nul
