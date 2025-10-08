@@ -200,21 +200,38 @@ class LinphoneService : Service() {
                     // CRITICAL: Force everything for audio transmission
                     call.microphoneMuted = false
                     core.isMicEnabled = true
-                    call.microphoneVolumeGain = 2.0f  // Maximum gain
 
-                    // Ensure audio mode is still correct
-                    if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
-                        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                        Log.e(TAG, "⚠️  Audio mode was reset, restored to MODE_IN_COMMUNICATION")
+                    // CRITICAL: Ensure audio mode is set correctly FIRST
+                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
+                    // Force audio routing to be stable - use earpiece by default
+                    try {
+                        if (!isBluetoothConnected) {
+                            audioManager.isSpeakerphoneOn = false
+
+                            // Set input audio device explicitly to phone's microphone
+                            val micDevice = core.audioDevices.firstOrNull {
+                                it.type == AudioDevice.Type.Microphone
+                            }
+                            if (micDevice != null) {
+                                core.inputAudioDevice = micDevice
+                                Log.e(TAG, "🎤 Forced input to: ${micDevice.deviceName}")
+                            } else {
+                                Log.e(TAG, "⚠️ No microphone device found!")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error setting audio device", e)
                     }
 
                     // Start keep-alive to maintain audio stream
                     startKeepAlive()
 
                     Log.e(TAG, "🎤 Mic muted: ${call.microphoneMuted}")
-                    Log.e(TAG, "🎤 Mic gain: ${call.microphoneVolumeGain}")
                     Log.e(TAG, "🎤 Core mic enabled: ${core.isMicEnabled}")
                     Log.e(TAG, "🔊 Audio mode: ${audioManager.mode}")
+                    Log.e(TAG, "🎙️ Input device: ${core.inputAudioDevice?.deviceName}")
+                    Log.e(TAG, "🔊 Output device: ${core.outputAudioDevice?.deviceName}")
 
                     // Check audio stats and codec info - USE DELAYED CHECK
                     mainHandler.postDelayed({
@@ -967,24 +984,51 @@ class LinphoneService : Service() {
                         // Force microphone settings
                         call.microphoneMuted = false
                         core.isMicEnabled = true
-                        call.microphoneVolumeGain = 2.0f
+
+                        // Force audio mode (Android sometimes resets it)
+                        if (audioManager.mode != AudioManager.MODE_IN_COMMUNICATION) {
+                            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                            Log.e(TAG, "[MicCheck #$checkCount] ⚠️ Audio mode was reset to ${audioManager.mode}, restored")
+                        }
+
+                        // Force input device to microphone
+                        try {
+                            val currentInput = core.inputAudioDevice
+                            if (currentInput?.type != AudioDevice.Type.Microphone && !isBluetoothConnected) {
+                                val micDevice = core.audioDevices.firstOrNull {
+                                    it.type == AudioDevice.Type.Microphone
+                                }
+                                if (micDevice != null) {
+                                    core.inputAudioDevice = micDevice
+                                    Log.e(TAG, "[MicCheck #$checkCount] ⚠️ Input device changed, restored to microphone")
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "[MicCheck #$checkCount] Error checking input device", e)
+                        }
 
                         // Check audio stats
                         call.audioStats?.let { stats ->
-                            Log.d(TAG, "[MicCheck #$checkCount] Upload: ${stats.uploadBandwidth} bps")
+                            Log.d(TAG, "[MicCheck #$checkCount] Upload: ${stats.uploadBandwidth} bps, Download: ${stats.downloadBandwidth} bps")
 
-                            if (stats.uploadBandwidth == 0.0f) {
-                                Log.e(TAG, "[MicCheck #$checkCount] !!! ZERO UPLOAD - FORCING MIC !!!")
+                            if (stats.uploadBandwidth < 50.0f) {
+                                Log.e(TAG, "[MicCheck #$checkCount] !!! LOW/ZERO UPLOAD - FORCING MIC RESET !!!")
 
-                                // Try to force audio restart
+                                // Try to force audio restart by toggling mic
                                 call.microphoneMuted = true
+                                core.isMicEnabled = false
+
                                 mainHandler.postDelayed({
                                     call.microphoneMuted = false
-                                    call.microphoneVolumeGain = 2.0f
-                                    Log.d(TAG, "Toggled mic to force restart")
-                                }, 100)
+                                    core.isMicEnabled = true
+
+                                    // Force audio mode again
+                                    audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+
+                                    Log.e(TAG, "Mic toggled to force restart")
+                                }, 200)
                             } else {
-                                Log.d(TAG, "[MicCheck #$checkCount] Audio transmitting OK")
+                                Log.d(TAG, "[MicCheck #$checkCount] ✅ Audio transmitting OK")
                             }
                         }
 
