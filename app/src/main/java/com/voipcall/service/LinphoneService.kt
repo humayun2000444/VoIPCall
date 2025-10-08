@@ -103,6 +103,71 @@ class LinphoneService : Service() {
             Log.e(TAG, "MESSAGE: $message")
             Log.e(TAG, "========================================")
 
+            // Print SDP for debugging
+            try {
+                when (state) {
+                    Call.State.OutgoingProgress -> {
+                        val localSdp = call.callLog?.callId?.let {
+                            // Try to get local description
+                            try {
+                                // Log connection info
+                                call.params?.let { params ->
+                                    Log.e(TAG, "")
+                                    Log.e(TAG, "═══════════════ LOCAL SDP INFO ═══════════════")
+                                    Log.e(TAG, "Audio enabled: ${params.isAudioEnabled}")
+                                    Log.e(TAG, "Audio direction: ${params.audioDirection}")
+                                    Log.e(TAG, "Audio codec: ${params.usedAudioPayloadType?.mimeType ?: "Not set yet"}")
+
+                                    // Get local address info
+                                    call.callLog?.fromAddress?.let { addr ->
+                                        Log.e(TAG, "From: ${addr.asStringUriOnly()}")
+                                    }
+                                    call.callLog?.toAddress?.let { addr ->
+                                        Log.e(TAG, "To: ${addr.asStringUriOnly()}")
+                                    }
+                                    Log.e(TAG, "════════════════════════════════════════════════")
+                                    Log.e(TAG, "")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error getting local SDP", e)
+                            }
+                        }
+                    }
+                    Call.State.StreamsRunning -> {
+                        Log.e(TAG, "")
+                        Log.e(TAG, "═══════════════ SDP NEGOTIATION RESULT ═══════════════")
+
+                        // Log negotiated codec
+                        call.currentParams?.usedAudioPayloadType?.let { codec ->
+                            Log.e(TAG, "Negotiated codec: ${codec.mimeType} @ ${codec.clockRate}Hz")
+                            Log.e(TAG, "Channels: ${codec.channels}")
+                        }
+
+                        // Log audio stats to see actual RTP ports
+                        call.audioStats?.let { stats ->
+                            Log.e(TAG, "RTP stats available - bandwidth: ${stats.uploadBandwidth} bps")
+                        }
+
+                        // Log remote address
+                        call.remoteAddress?.let { addr ->
+                            Log.e(TAG, "Remote address: ${addr.asStringUriOnly()}")
+                            Log.e(TAG, "Remote domain: ${addr.domain}")
+                        }
+
+                        // Log local network info
+                        call.callLog?.fromAddress?.let { addr ->
+                            Log.e(TAG, "Local address: ${addr.asStringUriOnly()}")
+                        }
+
+                        Log.e(TAG, "═════════════════════════════════════════════════════")
+                        Log.e(TAG, "")
+                    }
+                    else -> {}
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error printing SDP", e)
+            }
+
             // Handle microphone settings based on call state
             when (state) {
                 Call.State.Connected -> {
@@ -301,28 +366,31 @@ class LinphoneService : Service() {
             // Set audio port range for better NAT traversal
             core.setAudioPort(-1)  // Use random port
 
-            // Configure NAT policy - STUN only for fast, reliable connection
-            // ICE/TURN disabled to prevent call timeout
+            // Configure NAT policy for restrictive networks (office WiFi)
             val natPolicy = core.createNatPolicy()
 
             // Enable STUN from provider for NAT traversal
             natPolicy?.isStunEnabled = true
             natPolicy?.stunServer = "iptsp.cosmocom.net:3478"
 
-            // Disable ICE and TURN - they cause call timeout
-            natPolicy?.isIceEnabled = false
+            // Enable ICE for better NAT traversal in restrictive networks
+            natPolicy?.isIceEnabled = true
             natPolicy?.isTurnEnabled = false
             natPolicy?.isUpnpEnabled = false
 
             core.natPolicy = natPolicy
 
-            // Set session timer for keep-alive (refresh every 90 seconds)
-            core.incTimeout = 90
+            // Enable SIP keepalive to maintain NAT bindings (critical for office WiFi)
+            core.sipTransportTimeout = 30000  // 30 seconds timeout
 
-            Log.d(TAG, "NAT policy configured with provider STUN")
+            // Set session timer for keep-alive (refresh every 30 seconds for restrictive networks)
+            core.incTimeout = 30
+
+            Log.d(TAG, "NAT policy configured for restrictive networks")
             Log.d(TAG, "STUN server: iptsp.cosmocom.net:3478")
-            Log.d(TAG, "ICE/TURN disabled for fast connection")
-            Log.d(TAG, "Audio configuration optimized for mobile networks")
+            Log.d(TAG, "ICE enabled for NAT traversal")
+            Log.d(TAG, "SIP timeout: 30s, session refresh: 30s")
+            Log.d(TAG, "TCP transport forced for office WiFi compatibility")
 
             // Start core
             core.start()
@@ -404,26 +472,30 @@ class LinphoneService : Service() {
             core.isMicEnabled = true
             Log.d(TAG, "Core microphone enabled: ${core.isMicEnabled}")
 
-            // Configure transports for IP trunking
+            // Configure transports for IP trunking - TCP priority for office networks
             val transports = core.transports
-            transports.udpPort = 5060
+            transports.tcpPort = 5060  // TCP first - works better through firewalls
+            transports.udpPort = 5060  // UDP as fallback
             core.transports = transports
+
+            Log.d(TAG, "Transports configured - TCP:5060 (priority), UDP:5060 (fallback)")
 
             // Use server IP in contact to avoid NAT issues
             core.guessHostname = false
             core.setUserAgent("VoIPCall", "1.0")
 
-            // Create identity with username from login
-            val identity = "sip:$username@$serverIp:$serverPort"
+            // Create identity with username from login - use TCP transport
+            val identity = "sip:$username@$serverIp:$serverPort;transport=tcp"
             val identityAddress = core.interpretUrl(identity)
 
             if (identityAddress != null) {
                 core.primaryContact = identity
-                Log.d(TAG, "Set identity to: $identity")
+                Log.d(TAG, "Set identity to: $identity (TCP)")
             }
 
-            // Create SIP address for destination
-            val sipAddress = "sip:$number@$serverIp:$serverPort"
+            // Create SIP address for destination with transport parameter
+            // Force TCP transport for better compatibility with office networks
+            val sipAddress = "sip:$number@$serverIp:$serverPort;transport=tcp"
             val address = core.interpretUrl(sipAddress)
 
             if (address != null) {
@@ -767,10 +839,9 @@ class LinphoneService : Service() {
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
 
+                // Remove delayed focus and pause on duck to avoid IllegalStateException
                 audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                     .setAudioAttributes(audioAttributes)
-                    .setAcceptsDelayedFocusGain(true)
-                    .setWillPauseWhenDucked(false)
                     .build()
 
                 val result = audioManager.requestAudioFocus(audioFocusRequest!!)
