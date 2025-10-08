@@ -204,9 +204,14 @@ class LinphoneService : Service() {
                     // CRITICAL: Ensure audio mode is set correctly FIRST
                     audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
 
-                    // Force audio routing to be stable - use earpiece by default
+                    // Force audio routing to be stable
                     try {
-                        if (!isBluetoothConnected) {
+                        if (isBluetoothConnected) {
+                            // Route audio to Bluetooth if connected
+                            Log.e(TAG, "🔵 Bluetooth connected, routing audio to Bluetooth")
+                            routeAudioToBluetooth()
+                        } else {
+                            // Use phone's earpiece/microphone
                             audioManager.isSpeakerphoneOn = false
 
                             // Set input audio device explicitly to phone's microphone
@@ -215,9 +220,20 @@ class LinphoneService : Service() {
                             }
                             if (micDevice != null) {
                                 core.inputAudioDevice = micDevice
+                                call.inputAudioDevice = micDevice
                                 Log.e(TAG, "🎤 Forced input to: ${micDevice.deviceName}")
                             } else {
                                 Log.e(TAG, "⚠️ No microphone device found!")
+                            }
+
+                            // Set output to earpiece
+                            val earpieceDevice = core.audioDevices.firstOrNull {
+                                it.type == AudioDevice.Type.Earpiece
+                            }
+                            if (earpieceDevice != null) {
+                                core.outputAudioDevice = earpieceDevice
+                                call.outputAudioDevice = earpieceDevice
+                                Log.e(TAG, "🔊 Forced output to: ${earpieceDevice.deviceName}")
                             }
                         }
                     } catch (e: Exception) {
@@ -745,30 +761,82 @@ class LinphoneService : Service() {
     private fun routeAudioToBluetooth() {
         try {
             if (isBluetoothConnected && core.currentCall != null) {
+                Log.d(TAG, "Starting Bluetooth audio routing...")
+
                 // Set audio mode for VoIP
                 audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
 
-                // Start Bluetooth SCO (Synchronous Connection-Oriented) for audio
-                if (!audioManager.isBluetoothScoOn) {
-                    audioManager.startBluetoothSco()
-                    audioManager.isBluetoothScoOn = true
+                // ALWAYS start Bluetooth SCO for each call (don't rely on isBluetoothScoOn state)
+                Log.d(TAG, "Starting Bluetooth SCO... (SCO state: ${audioManager.isBluetoothScoOn})")
+
+                // Stop first if it's on, then restart to ensure clean connection
+                if (audioManager.isBluetoothScoOn) {
+                    audioManager.stopBluetoothSco()
+                    Log.d(TAG, "Stopped existing Bluetooth SCO")
                 }
+
+                // Start Bluetooth SCO
+                audioManager.startBluetoothSco()
 
                 // Route audio to Bluetooth
                 audioManager.isSpeakerphoneOn = false
 
-                // Update Linphone to use Bluetooth device
-                val bluetoothDevice = core.audioDevices.firstOrNull {
-                    it.type == AudioDevice.Type.Bluetooth
-                }
+                // Wait for SCO to connect
+                mainHandler.postDelayed({
+                    try {
+                        Log.d(TAG, "Checking Bluetooth SCO connection...")
+                        Log.d(TAG, "AudioManager SCO state: ${audioManager.isBluetoothScoOn}")
+                        Log.d(TAG, "AudioManager mode: ${audioManager.mode}")
+                        Log.d(TAG, "Speaker on: ${audioManager.isSpeakerphoneOn}")
 
-                if (bluetoothDevice != null) {
-                    core.currentCall?.outputAudioDevice = bluetoothDevice
-                    core.currentCall?.inputAudioDevice = bluetoothDevice
-                    Log.d(TAG, "Audio routed to Bluetooth: ${bluetoothDevice.deviceName}")
-                } else {
-                    Log.d(TAG, "Bluetooth audio routing via AudioManager SCO")
-                }
+                        // Log all available devices with their types
+                        val devices = core.audioDevices
+                        Log.d(TAG, "Available audio devices (${devices.size}):")
+                        devices.forEach { device ->
+                            Log.d(TAG, "  - ${device.deviceName} | Type: ${device.type} | ID: ${device.id}")
+                        }
+
+                        // Find Bluetooth capture (microphone) and playback (speaker) devices
+                        val bluetoothCapture = devices.firstOrNull {
+                            it.type == AudioDevice.Type.Bluetooth && it.id.contains("capture", ignoreCase = true)
+                        }
+                        val bluetoothPlayback = devices.firstOrNull {
+                            it.type == AudioDevice.Type.Bluetooth && it.id.contains("playback", ignoreCase = true)
+                        }
+
+                        // If we can't find specific capture/playback, use any Bluetooth device
+                        val bluetoothInput = bluetoothCapture ?: devices.firstOrNull { it.type == AudioDevice.Type.Bluetooth }
+                        val bluetoothOutput = bluetoothPlayback ?: devices.firstOrNull { it.type == AudioDevice.Type.Bluetooth }
+
+                        if (bluetoothInput != null && bluetoothOutput != null) {
+                            // Set input to Bluetooth microphone
+                            core.currentCall?.inputAudioDevice = bluetoothInput
+                            core.inputAudioDevice = bluetoothInput
+
+                            // Set output to Bluetooth speaker
+                            core.currentCall?.outputAudioDevice = bluetoothOutput
+                            core.outputAudioDevice = bluetoothOutput
+
+                            Log.d(TAG, "✅ Bluetooth audio routed:")
+                            Log.d(TAG, "   Input: ${bluetoothInput.id}")
+                            Log.d(TAG, "   Output: ${bluetoothOutput.id}")
+                        } else {
+                            // Fallback: Linphone doesn't detect Bluetooth, use AudioManager only
+                            Log.w(TAG, "⚠️ Bluetooth device not detected by Linphone")
+                            Log.w(TAG, "Using AudioManager SCO only for Bluetooth routing")
+
+                            // Ensure SCO is on
+                            if (!audioManager.isBluetoothScoOn) {
+                                Log.e(TAG, "❌ SCO not connected! Restarting...")
+                                audioManager.startBluetoothSco()
+                            }
+                        }
+
+                        Log.d(TAG, "🎙️ Final Bluetooth SCO state: ${audioManager.isBluetoothScoOn}")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error setting Bluetooth device", e)
+                    }
+                }, 1000) // Wait 1000ms for SCO to establish
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error routing audio to Bluetooth", e)
@@ -991,16 +1059,32 @@ class LinphoneService : Service() {
                             Log.e(TAG, "[MicCheck #$checkCount] ⚠️ Audio mode was reset to ${audioManager.mode}, restored")
                         }
 
-                        // Force input device to microphone
+                        // Force input device to correct device (Bluetooth or Microphone)
                         try {
                             val currentInput = core.inputAudioDevice
-                            if (currentInput?.type != AudioDevice.Type.Microphone && !isBluetoothConnected) {
-                                val micDevice = core.audioDevices.firstOrNull {
-                                    it.type == AudioDevice.Type.Microphone
+                            if (isBluetoothConnected) {
+                                // Should be using Bluetooth
+                                if (currentInput?.type != AudioDevice.Type.Bluetooth) {
+                                    val btDevice = core.audioDevices.firstOrNull {
+                                        it.type == AudioDevice.Type.Bluetooth
+                                    }
+                                    if (btDevice != null) {
+                                        core.inputAudioDevice = btDevice
+                                        call.inputAudioDevice = btDevice
+                                        Log.e(TAG, "[MicCheck #$checkCount] ⚠️ Input device changed, restored to Bluetooth")
+                                    }
                                 }
-                                if (micDevice != null) {
-                                    core.inputAudioDevice = micDevice
-                                    Log.e(TAG, "[MicCheck #$checkCount] ⚠️ Input device changed, restored to microphone")
+                            } else {
+                                // Should be using Microphone
+                                if (currentInput?.type != AudioDevice.Type.Microphone) {
+                                    val micDevice = core.audioDevices.firstOrNull {
+                                        it.type == AudioDevice.Type.Microphone
+                                    }
+                                    if (micDevice != null) {
+                                        core.inputAudioDevice = micDevice
+                                        call.inputAudioDevice = micDevice
+                                        Log.e(TAG, "[MicCheck #$checkCount] ⚠️ Input device changed, restored to microphone")
+                                    }
                                 }
                             }
                         } catch (e: Exception) {
