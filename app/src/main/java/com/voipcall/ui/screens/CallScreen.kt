@@ -177,33 +177,61 @@ fun CallScreen(
                 Spacer(modifier = Modifier.height(32.dp))
             }
 
-            // Hang up button
+            // Hang up button or Close button (when call ended)
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(72.dp)
-                        .clip(CircleShape)
-                        .background(Red)
-                        .clickable { onHangupClick() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.CallEnd,
-                        contentDescription = "Hang up",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
+                if (callState == CallState.ENDED) {
+                    // Show Close (X) button when call has ended
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .clickable { onHangupClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "Close",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                } else {
+                    // Show End Call button during active call
+                    Box(
+                        modifier = Modifier
+                            .size(72.dp)
+                            .clip(CircleShape)
+                            .background(Red)
+                            .clickable { onHangupClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.CallEnd,
+                            contentDescription = "Hang up",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "End Call",
+                        fontSize = 14.sp,
+                        color = Color.Gray
                     )
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "End Call",
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
             }
 
             Spacer(modifier = Modifier.height(64.dp))

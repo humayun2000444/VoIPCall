@@ -59,20 +59,27 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
             when (intent?.action) {
                 "com.voipcall.CALL_STATE_CHANGED" -> {
                     val state = intent.getStringExtra("state")
-                    Log.d(TAG, "Received call state: $state")
+                    Log.d(TAG, "Received call state from service: $state")
 
-                    _callState.value = when (state) {
+                    val newState = when (state) {
                         "OutgoingInit", "OutgoingProgress", "OutgoingRinging" -> CallState.OUTGOING
                         "IncomingReceived", "IncomingEarlyMedia" -> CallState.INCOMING
                         "Connected", "StreamsRunning" -> CallState.CONNECTED
                         "End", "Released" -> {
+                            Log.d(TAG, "Call ended - setting state to ENDED")
                             _isMuted.value = false
                             _isSpeakerOn.value = false
                             CallState.ENDED
                         }
                         "Error" -> CallState.ERROR
-                        else -> _callState.value
+                        else -> {
+                            Log.w(TAG, "Unknown call state: $state, keeping current state")
+                            _callState.value
+                        }
                     }
+
+                    Log.d(TAG, "Setting callState from ${_callState.value} to $newState")
+                    _callState.value = newState
                 }
                 "com.voipcall.MUTE_CHANGED" -> {
                     _isMuted.value = intent.getBooleanExtra("muted", false)

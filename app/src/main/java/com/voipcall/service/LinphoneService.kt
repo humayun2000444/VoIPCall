@@ -402,9 +402,9 @@ class LinphoneService : Service() {
             // Configure NAT policy for restrictive networks (office WiFi)
             val natPolicy = core.createNatPolicy()
 
-            // Enable STUN from provider for NAT traversal
+            // Enable STUN for NAT traversal - using Google's public STUN server
             natPolicy?.isStunEnabled = true
-            natPolicy?.stunServer = "iptsp.cosmocom.net:3478"
+            natPolicy?.stunServer = "stun.l.google.com:19302"
 
             // Enable ICE for better NAT traversal in restrictive networks
             natPolicy?.isIceEnabled = true
@@ -420,7 +420,7 @@ class LinphoneService : Service() {
             core.incTimeout = 30
 
             Log.d(TAG, "NAT policy configured for restrictive networks")
-            Log.d(TAG, "STUN server: iptsp.cosmocom.net:3478")
+            Log.d(TAG, "STUN server: stun.l.google.com:19302 (Google)")
             Log.d(TAG, "ICE enabled for NAT traversal")
             Log.d(TAG, "SIP timeout: 30s, session refresh: 30s")
             Log.d(TAG, "TCP transport forced for office WiFi compatibility")

@@ -95,6 +95,13 @@ fun VoIPCallApp(viewModel: CallViewModel) {
 
     var showSettings by remember { mutableStateOf(false) }
 
+    // Log call state changes
+    LaunchedEffect(callState) {
+        android.util.Log.d("VoIPCallApp", "═══ Call state changed to: $callState ═══")
+    }
+
+    android.util.Log.d("VoIPCallApp", "Rendering UI for callState: $callState, isLoggedIn: $isLoggedIn, showSettings: $showSettings")
+
     when {
         !isLoggedIn -> {
             LoginScreen(
@@ -114,19 +121,29 @@ fun VoIPCallApp(viewModel: CallViewModel) {
                 onBackClick = { showSettings = false }
             )
         }
-        callState == CallState.IDLE || callState == CallState.ENDED -> {
-            LaunchedEffect(callState) {
-                if (callState == CallState.ENDED) {
-                    kotlinx.coroutines.delay(1500)
-                    viewModel.resetCallState()
-                }
-            }
-
+        callState == CallState.IDLE -> {
             DialScreen(
                 phoneNumber = phoneNumber,
                 onPhoneNumberChange = { viewModel.updatePhoneNumber(it) },
                 onCallClick = { viewModel.makeCall() },
                 onSettingsClick = { showSettings = true }
+            )
+        }
+        callState == CallState.ENDED -> {
+            // Show call ended screen with close button
+            CallScreen(
+                phoneNumber = phoneNumber,
+                callState = callState,
+                isMuted = isMuted,
+                isSpeakerOn = isSpeakerOn,
+                currentVoiceType = currentVoiceType,
+                onHangupClick = {
+                    // Close button clicked - go back to dial screen
+                    viewModel.resetCallState()
+                },
+                onMuteClick = { viewModel.toggleMute() },
+                onSpeakerClick = { viewModel.toggleSpeaker() },
+                onVoiceTypeChange = { viewModel.changeVoiceType(it) }
             )
         }
         else -> {

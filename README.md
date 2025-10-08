@@ -2,14 +2,16 @@
 
 ![Android](https://img.shields.io/badge/Platform-Android-green.svg) ![Kotlin](https://img.shields.io/badge/Language-Kotlin-blue.svg) ![API](https://img.shields.io/badge/API-24%2B-brightgreen.svg) ![License](https://img.shields.io/badge/License-Demo-orange.svg)
 
-**Modern Android VoIP calling application with real-time voice morphing, voice changer effects, and FreeSWITCH integration.** Built with Kotlin, Jetpack Compose, and Linphone SDK for professional SIP calling, IP trunking, and live voice transformation.
+**Modern Android VoIP calling application with real-time voice morphing, voice changer effects, and FreeSWITCH integration.** Built with Kotlin, Jetpack Compose, and Linphone SDK for professional SIP calling, IP trunking, and live voice transformation with full Bluetooth headset support.
 
 ### 🌟 Key Features
-- 📱 **Android VoIP App** with IP trunking and SIP protocol
+- 📱 **Android VoIP App** with IP trunking and SIP protocol (TCP/UDP)
 - 🎙️ **Real-Time Voice Changer** with 4 voice effects (Male, Female, Kid, Normal)
 - 📞 **FreeSWITCH Integration** for enterprise VoIP calling
 - 🎨 **Material Design 3** with modern Jetpack Compose UI
 - 🔊 **Advanced Audio Controls** including mute, speaker toggle, and echo cancellation
+- 🎧 **Full Bluetooth Support** - Mic & speaker work seamlessly with Bluetooth headsets
+- 🌐 **Works on All Networks** - Office WiFi, Home WiFi, Mobile Data
 - ⚡ **Low Latency** voice morphing during active calls
 
 ---
@@ -21,6 +23,7 @@
 - [Quick Start](#usage)
 - [Voice Morphing](#voice-morphing-implementation)
 - [VoIP Configuration](#configuration)
+- [Network Requirements](#network-configuration)
 - [Troubleshooting](#troubleshooting)
 - [API Documentation](#development)
 - [Contributing](#support)
@@ -31,17 +34,18 @@
 
 ### 🔐 VoIP Authentication & IP Trunking
 - **Direct IP Trunking**: Connect to FreeSWITCH, Asterisk, or any SIP server without registration
-- **SIP Protocol Support**: Full SIP/UDP transport implementation
+- **Dual Transport Support**: TCP (primary) and UDP (fallback) for firewall compatibility
+- **NAT Traversal**: ICE enabled with Google STUN server for restrictive networks
 - **Persistent Session Management**: Save username, server IP, and port configurations
 - **Secure Connections**: Support for VoIP server authentication
-- **No Registration Required**: Direct peer-to-peer IP-based calling
+- **Office WiFi Compatible**: Works through corporate firewalls and restrictive networks
 
 ### 📞 Professional Call Management
 - **Smart Dial Pad**: Full numeric keypad (0-9, *, #) with backspace functionality
 - **Outgoing VoIP Calls**: Direct IP-to-IP calling via FreeSWITCH/SIP protocol
 - **Real-Time Call Timer**: Displays accurate call duration from connection to hangup
 - **Call State Monitoring**: Live status tracking (Calling, Ringing, Connected, Ended, Error)
-- **Call History**: Track dialed numbers and call sessions
+- **Call End Handling**: Displays "Call Ended" screen with close button for clean navigation
 - **One-Touch Dialing**: Quick call initiation with a single tap
 
 ### 🎤 Real-Time Voice Morphing & Voice Changer
@@ -57,10 +61,23 @@ Transform your voice in real-time during active VoIP calls:
 ### 🔊 Advanced Audio Controls & Management
 - **Mute/Unmute Toggle**: One-tap microphone control during calls
 - **Speaker/Earpiece Switching**: Seamless audio routing between speaker and earpiece
+- **Bluetooth Headset Support**: Full mic and speaker support for Bluetooth devices
+  - Automatic Bluetooth detection and routing
+  - Separate capture (mic) and playback (speaker) device handling
+  - SCO (Synchronous Connection-Oriented) audio for high quality
 - **Echo Cancellation**: Built-in acoustic echo cancellation for crystal-clear audio
 - **Auto Audio Routing**: Automatic detection and switching for headphones and Bluetooth devices
 - **Volume Management**: Independent control of microphone gain and speaker volume
 - **Noise Suppression**: Background noise reduction for professional call quality
+- **Aggressive Mic Monitoring**: Automatic microphone recovery if audio drops
+
+### 🌐 Network Compatibility
+- **Works on All Networks**: Home WiFi, Office WiFi, Mobile Data (4G/5G)
+- **TCP Transport Priority**: Uses TCP for better firewall traversal
+- **ICE Support**: Interactive Connectivity Establishment for NAT traversal
+- **STUN Integration**: Google STUN server (stun.l.google.com:19302) for public IP discovery
+- **RTP Port Range**: Configurable 16384-32768 (matches FreeSWITCH default)
+- **Network Change Handling**: Automatic reconnection on network switches
 
 ## Technical Stack
 
@@ -69,7 +86,7 @@ Transform your voice in real-time during active VoIP calls:
 - **UI Framework**: Jetpack Compose with Material Design 3
 - **Architecture Pattern**: MVVM (Model-View-ViewModel) with StateFlow for reactive programming
 - **VoIP Engine**: Linphone SDK 5.2.0 - Industry-standard open-source SIP library
-- **Minimum Android Version**: API 24 (Android 7.0 Nougat) and above
+- **Minimum Android Version**: API 24 (Android 7.0 Nougon) and above
 - **Target Android Version**: API 34 (Android 14)
 - **Build System**: Gradle with Kotlin DSL
 - **Dependency Injection**: Manual DI with ViewModel factory pattern
@@ -83,27 +100,41 @@ Transform your voice in real-time during active VoIP calls:
 - **Lifecycle**: `androidx.lifecycle:lifecycle-runtime-ktx:2.6.2` - Lifecycle-aware components
 - **Material Icons**: `androidx.compose.material:material-icons-extended` - Extended Material Design icons
 
+### Audio Codecs Supported
+- **Opus** - Primary codec for high quality (48kHz)
+- **PCMU (G.711)** - Universal compatibility codec
+- **PCMA (G.711)** - Alternative G.711 variant
+- **G.722** - Wideband audio
+- **GSM** - Fallback for low bandwidth
+- **Speex** - Voice optimization
+- All codecs enabled with automatic negotiation
+
 ### Keywords
-`Android VoIP`, `Voice Changer App`, `Real-time Voice Morphing`, `Kotlin VoIP`, `Jetpack Compose`, `FreeSWITCH Android`, `SIP Client`, `IP Trunking`, `Linphone SDK`, `Android Voice Effects`, `VoIP Call App`, `Voice Transformer`, `SIP Calling`, `Voice Modulator Android`
+`Android VoIP`, `Voice Changer App`, `Real-time Voice Morphing`, `Kotlin VoIP`, `Jetpack Compose`, `FreeSWITCH Android`, `SIP Client`, `IP Trunking`, `Linphone SDK`, `Android Voice Effects`, `VoIP Call App`, `Voice Transformer`, `SIP Calling`, `Voice Modulator Android`, `Bluetooth VoIP`, `Corporate Network VoIP`
 
 ## Project Structure
 
 ```
 app/src/main/java/com/voipcall/
 ├── MainActivity.kt                 # Main activity and navigation
-├── CallViewModel.kt                # Call state management
+├── CallViewModel.kt                # Call state management with broadcast receivers
 ├── VoIPCallApplication.kt          # Application class
 ├── model/
-│   ├── CallState.kt               # Call state enum
+│   ├── CallState.kt               # Call state enum (IDLE, OUTGOING, CONNECTED, ENDED, ERROR)
 │   ├── VoiceType.kt               # Voice morphing types
 │   └── TrunkConfig.kt             # IP trunk configuration
 ├── service/
-│   └── LinphoneService.kt         # VoIP service with voice effects
+│   └── LinphoneService.kt         # VoIP service with:
+│                                  #   - Bluetooth audio routing
+│                                  #   - TCP/UDP transport handling
+│                                  #   - Microphone monitoring & recovery
+│                                  #   - Network change detection
+│                                  #   - Audio device management
 └── ui/
     ├── screens/
     │   ├── LoginScreen.kt         # Login/connection screen
     │   ├── DialScreen.kt          # Dial pad interface
-    │   ├── CallScreen.kt          # Active call interface
+    │   ├── CallScreen.kt          # Active call interface with voice effects
     │   └── SettingsScreen.kt      # Configuration screen
     └── theme/
         ├── Color.kt               # App colors
@@ -176,19 +207,19 @@ app/build/outputs/apk/debug/app-debug.apk
 1. **Launch the VoIP Call App** on your Android device
 2. **Enter Your VoIP Credentials**:
    - **Username**: Your SIP extension number (e.g., `1001`, `2000`)
-   - **Server IP Address**: Your VoIP server's IP address (e.g., `192.168.1.100`, `10.0.0.5`)
+   - **Server IP Address**: Your VoIP server's IP address (e.g., `192.168.1.100`, `103.95.96.76`)
    - **Server Port**: SIP signaling port (default: `5060`, can be custom)
 3. **Tap "Connect"** to establish connection
 
 #### Example Configuration
 ```
-Username: 1001
-Server IP: 192.168.1.100
+Username: 09646888888
+Server IP: 103.95.96.76
 Server Port: 5060
 ```
 
 ### Compatible VoIP Servers & PBX Systems
-✅ **FreeSWITCH** - Open-source telephony platform
+✅ **FreeSWITCH** - Open-source telephony platform (tested and verified)
 ✅ **Asterisk** - Leading open-source PBX
 ✅ **Kamailio** - SIP server and proxy
 ✅ **OpenSIPS** - SIP proxy and router
@@ -197,10 +228,12 @@ Server Port: 5060
 
 ### Network Requirements for VoIP Calling
 - **Internet Connection**: WiFi or mobile data (4G/5G recommended)
-- **Bandwidth**: Minimum 64 kbps upload/download per call
+- **Bandwidth**: Minimum 64 kbps upload/download per call (200 kbps typical)
 - **Latency**: <150ms for optimal call quality
-- **NAT**: Router must allow SIP and RTP traffic
-- **Firewall**: Open UDP ports 5060 (SIP) and 10000-20000 (RTP)
+- **NAT**: Automatic NAT traversal with ICE and STUN
+- **Firewall**:
+  - SIP: TCP/UDP port 5060
+  - RTP: UDP ports 16384-32768 (configurable)
 
 ## Usage
 
@@ -244,12 +277,14 @@ Server Port: 5060
 **Advanced Audio Controls**:
 - 🔇 **Mute/Unmute**: Tap microphone icon to silence your audio
 - 🔊 **Speaker Toggle**: Switch between speaker and earpiece mode
-- 🎧 **Auto-switching**: Automatic routing when headphones are plugged in
+- 🎧 **Bluetooth Support**: Automatically routes to connected Bluetooth headset
+- 🔄 **Auto-switching**: Automatic routing when audio devices change
 
 **Ending the Call**:
 - Tap the **red "End Call" button** to hang up
-- Call statistics and duration are displayed
-- Returns to dial pad screen automatically
+- Call displays "Call Ended" status
+- Tap the **close (X) button** to return to dial pad
+- Call statistics and duration are preserved
 
 ## Android Permissions Required
 
@@ -270,6 +305,14 @@ The app requires the following Android permissions for full functionality:
 <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 ```
 **Purpose**: Record voice for calls, apply voice effects, control audio routing
+
+#### Bluetooth Permissions
+```xml
+<uses-permission android:name="android.permission.BLUETOOTH" />
+<uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+<uses-permission android:name="android.permission.BLUETOOTH_CONNECT" /> <!-- Android 12+ -->
+```
+**Purpose**: Detect and route audio to Bluetooth headsets
 
 #### Call Management Permissions
 ```xml
@@ -310,7 +353,7 @@ The real-time voice morphing feature is implemented using **Linphone SDK's audio
 | **Kid** | 0.85 | High-pitch emphasis | Emphasized high frequencies for child-like voice |
 
 #### Voice Transformation Process
-1. **Audio Capture**: Raw audio captured from device microphone
+1. **Audio Capture**: Raw audio captured from device microphone or Bluetooth headset
 2. **Real-Time Processing**: Linphone SDK applies gain adjustments
 3. **Frequency Modification**: Audio characteristics are altered based on selected voice type
 4. **RTP Transmission**: Modified audio is encoded and sent via RTP protocol
@@ -328,25 +371,38 @@ call.microphoneVolumeGain = when (voiceType) {
 ```
 
 ### Voice Quality & Performance
-- **Audio Codec Support**: G.711, G.722, Opus, Speex
-- **Sample Rate**: 8kHz - 48kHz (adaptive)
-- **Bit Rate**: 8-64 kbps
+- **Audio Codec Support**: Opus (primary), G.711 (PCMU/PCMA), G.722, Speex
+- **Sample Rate**: 8kHz - 48kHz (adaptive, Opus defaults to 48kHz)
+- **Bit Rate**: 64-200 kbps (Opus typical)
 - **Processing Latency**: <10ms
 - **CPU Usage**: <5% on modern Android devices
 
 ## Network Configuration
 
-### IP Trunking
-The app uses **direct IP trunking** without SIP registration:
-- No authentication required
-- Direct peer-to-peer calling
-- NAT traversal disabled for local network use
-- UDP transport on port 5060
+### Transport Protocols
+The app uses **dual transport** for maximum compatibility:
+- **TCP (Primary)**: Port 5060 - Better for corporate firewalls
+- **UDP (Fallback)**: Port 5060 - Faster for home networks
+
+SIP URI format with TCP: `sip:number@server:5060;transport=tcp`
+
+### NAT Traversal & Connectivity
+- **ICE Enabled**: Interactive Connectivity Establishment for NAT traversal
+- **STUN Server**: Google STUN (stun.l.google.com:19302) for public IP discovery
+- **Session Refresh**: 30-second keepalive for restrictive networks
+- **Network Monitoring**: Automatic detection and handling of network changes
+
+### IP Trunking Configuration
+- **Direct IP Calling**: No SIP registration required
+- **Peer-to-Peer**: Direct connections between endpoints
+- **FreeSWITCH Compatible**: Optimized for FreeSWITCH IP trunking
+- **RTP Port Range**: 16384-32768 (matches FreeSWITCH defaults)
 
 ### Firewall Requirements
 Ensure the following ports are open:
-- **UDP 5060**: SIP signaling
-- **UDP 10000-20000**: RTP audio (dynamic range)
+- **TCP/UDP 5060**: SIP signaling (TCP preferred)
+- **UDP 16384-32768**: RTP audio (configurable range)
+- **UDP 19302**: STUN (Google STUN server)
 
 ## Troubleshooting & FAQ
 
@@ -354,42 +410,63 @@ Ensure the following ports are open:
 
 #### 🎤 Audio Problems
 
-**Problem**: No audio during call
+**Problem**: No audio during call (microphone not working)
 - ✅ **Solution**: Grant microphone and speaker permissions in Android Settings
 - ✅ **Check**: Ensure microphone isn't muted in the app
+- ✅ **Bluetooth**: If using Bluetooth headset, verify SCO connection is established
+- ✅ **Logs**: Check for "Upload bandwidth: 0 bps" in logs - indicates mic issue
 - ✅ **Verify**: Test microphone in other apps to rule out hardware issues
+
+**Problem**: Bluetooth headset microphone not working
+- ✅ **Solution**: App automatically detects Bluetooth - check "Bluetooth connected" in logs
+- ✅ **SCO**: Verify "Bluetooth SCO state: true" in logs
+- ✅ **Permissions**: Ensure BLUETOOTH_CONNECT permission granted (Android 12+)
+- ✅ **Audio Routing**: Check logs for "Audio routed to Bluetooth via Linphone"
+- ✅ **Restart**: Disconnect and reconnect Bluetooth headset
 
 **Problem**: Echo or feedback during calls
 - ✅ **Solution**: Echo cancellation is enabled by default - reduce speaker volume
 - ✅ **Alternative**: Use headphones for better audio isolation
 - ✅ **Settings**: Disable speaker mode and use earpiece
+- ✅ **Bluetooth**: Bluetooth headsets eliminate echo naturally
 
 **Problem**: Choppy or robotic audio
 - ✅ **Solution**: Check network connection quality (WiFi preferred over mobile data)
-- ✅ **Bandwidth**: Ensure at least 64 kbps upload/download speed
+- ✅ **Bandwidth**: Ensure at least 64 kbps upload/download speed (check logs for bandwidth stats)
 - ✅ **Network**: Switch from WiFi to mobile data or vice versa
+- ✅ **Codec**: App auto-negotiates best codec (Opus preferred)
 
 **Problem**: Voice effects not working
 - ✅ **Requirement**: Voice morphing only works during **active calls** (Connected state)
 - ✅ **Check**: Effects apply to **outgoing audio** only - recipient hears modified voice
 - ✅ **Tip**: Switch between different voice effects to test functionality
+- ✅ **Bluetooth**: Voice effects work with Bluetooth headsets
 
 #### 📞 Connection & Calling Issues
 
-**Problem**: Cannot connect to VoIP server
-- ✅ **Verify**: Server IP address is correct and reachable
+**Problem**: Cannot connect to VoIP server (especially on office WiFi)
+- ✅ **TCP Transport**: App automatically uses TCP for better firewall compatibility
 - ✅ **Port**: Confirm SIP port (usually 5060) is correct
 - ✅ **Network**: Check internet connection and firewall settings
 - ✅ **Server**: Ensure VoIP server is running and accessible
+- ✅ **Logs**: Check for "OutgoingProgress" state in logs
+
+**Problem**: Call works on mobile data but not office WiFi
+- ✅ **Firewall**: Office firewalls may block SIP/RTP - TCP transport helps
+- ✅ **ICE**: App uses ICE for NAT traversal (enabled automatically)
+- ✅ **IT Support**: Contact IT department to allow ports 5060 and 16384-32768
+- ✅ **Success**: App is designed to work on restrictive networks with TCP
 
 **Problem**: Call initiation fails
 - ✅ **Permissions**: Ensure server allows IP trunking without registration
 - ✅ **Format**: Check phone number format (include country/area codes if needed)
 - ✅ **Credentials**: Verify username is valid on the VoIP server
+- ✅ **Logs**: Check "Call params - Audio: true, Direction: SendRecv" in logs
 
 **Problem**: NAT/Firewall blocking calls
-- ✅ **Router**: Open UDP ports 5060 (SIP) and 10000-20000 (RTP)
-- ✅ **Firewall**: Allow VoIP Call app through Android firewall
+- ✅ **ICE**: Enabled automatically for NAT traversal
+- ✅ **STUN**: Using Google STUN server (stun.l.google.com:19302)
+- ✅ **TCP**: TCP transport bypasses many firewall restrictions
 - ✅ **Network**: Try connecting from a different network to isolate the issue
 
 #### 🔧 App Performance Issues
@@ -403,6 +480,13 @@ Ensure the following ports are open:
 **Problem**: High battery drain
 - ✅ **Background**: App uses foreground service only during active calls
 - ✅ **Optimization**: Enable battery optimization in Android settings if not calling frequently
+- ✅ **Bluetooth**: Bluetooth SCO is stopped when call ends to save battery
+
+**Problem**: Call ended screen not showing close button
+- ✅ **State**: Check logs for "Call state changed to: ENDED"
+- ✅ **UI**: Close button (X icon) should appear automatically
+- ✅ **Navigation**: Clicking close button returns to dial screen
+- ✅ **Auto**: System handles navigation when call ends
 
 ### Frequently Asked Questions (FAQ)
 
@@ -419,10 +503,19 @@ A: Yes, voice effects are applied client-side before transmission, compatible wi
 A: IP trunking allows direct peer-to-peer calling without authentication. No SIP REGISTER required.
 
 **Q: Can I use this app over mobile data?**
-A: Yes, but WiFi is recommended for better call quality and lower data usage.
+A: Yes, the app works perfectly on mobile data, home WiFi, and office WiFi. TCP transport ensures compatibility.
 
 **Q: Are calls encrypted?**
 A: Current implementation uses unencrypted SIP/RTP. SRTP encryption can be added for production use.
+
+**Q: Does Bluetooth headset work for both mic and speaker?**
+A: Yes! Full Bluetooth support including both microphone capture and speaker playback.
+
+**Q: Why does my voice work after disconnecting Bluetooth?**
+A: If this happens, it indicates the Bluetooth routing was working - the app automatically switches back to phone mic/speaker.
+
+**Q: What networks does the app work on?**
+A: Works on all networks: Office WiFi (with firewall), Home WiFi, Mobile Data (4G/5G). TCP transport ensures compatibility.
 
 ## Development
 
@@ -431,11 +524,24 @@ The app includes detailed logging for debugging:
 ```kotlin
 Log.d("LinphoneService", "Message")
 Log.d("CallViewModel", "Message")
+Log.d("VoIPCallApp", "Message")
 ```
 
 View logs using:
 ```bash
-adb logcat | grep -E "LinphoneService|CallViewModel"
+adb logcat | grep -E "LinphoneService|CallViewModel|VoIPCallApp"
+```
+
+Filter for specific events:
+```bash
+# Call state changes
+adb logcat | grep "CALL STATE"
+
+# Audio routing
+adb logcat | grep "Bluetooth"
+
+# Network info
+adb logcat | grep "SDP\|bandwidth"
 ```
 
 ### Testing
@@ -448,6 +554,15 @@ Run instrumented tests:
 ```bash
 ./gradlew connectedAndroidTest
 ```
+
+### Key Features to Test
+- ✅ Login with different server configurations
+- ✅ Outgoing calls on different networks (WiFi, mobile data)
+- ✅ Voice effects switching during active calls
+- ✅ Bluetooth headset mic and speaker
+- ✅ Call end screen with close button
+- ✅ Network change during active call
+- ✅ Mute/unmute and speaker toggle
 
 ## License
 
@@ -472,6 +587,8 @@ We welcome contributions from the developer community! Here's how you can help:
 - 🎨 **UI/UX**: Enhance Material Design interface
 - 🔊 **Audio**: Advanced voice effects, equalizer, filters
 - 🌐 **Internationalization**: Add language translations
+- 🎧 **Bluetooth**: Improve Bluetooth device detection and routing
+- 🌐 **Network**: Enhance NAT traversal and firewall compatibility
 
 ### Getting Help & Support
 
@@ -504,15 +621,40 @@ We welcome contributions from the developer community! Here's how you can help:
 - ✨ **v1.8**: Multi-party conference calling
 
 ### Under Consideration
-- Background call support
-- Bluetooth headset integration
+- Call quality indicators with real-time stats
+- Bandwidth optimization and codec selection
 - Wear OS companion app
-- Call quality indicators
-- Bandwidth optimization
+- Multiple Bluetooth device support
+- Wi-Fi calling handoff
 
 ## Version History & Changelog
 
-### v1.0.0 (Current Release) - January 2025
+### v1.0.1 (Current Release) - October 2025
+**Major Update: Network & Bluetooth Improvements**
+- ✅ **Bluetooth Support**: Full mic and speaker support for Bluetooth headsets
+  - Automatic Bluetooth detection and SCO routing
+  - Separate capture/playback device handling
+  - Works with popular Bluetooth headsets
+- ✅ **Network Compatibility**: Works on all networks
+  - TCP transport priority for corporate firewalls
+  - ICE enabled for NAT traversal
+  - Google STUN server integration
+  - Tested on office WiFi, home WiFi, and mobile data
+- ✅ **Audio Improvements**:
+  - Aggressive microphone monitoring and recovery
+  - Auto-restart mic if upload bandwidth drops
+  - Audio device routing improvements
+  - Network change detection and handling
+- ✅ **UI Enhancements**:
+  - Call ended screen with close button
+  - Better dialpad number visibility
+  - Fixed text color issues
+- ✅ **FreeSWITCH Optimization**:
+  - RTP port range 16384-32768 (matches FreeSWITCH)
+  - Session refresh optimization
+  - Better codec negotiation
+
+### v1.0.0 - January 2025
 **Initial Public Release**
 - ✅ **Authentication**: Login with IP trunking (username, IP, port)
 - ✅ **Dial Pad**: Full numeric keypad with DTMF support
@@ -544,7 +686,7 @@ This project is developed for **demonstration and educational purposes**.
 ---
 
 ## Tags & Keywords
-`android-voip` `voice-changer` `real-time-voice-morphing` `kotlin-android` `jetpack-compose` `freeswitch-integration` `sip-client` `ip-trunking` `linphone-sdk` `voip-calling-app` `voice-effects` `android-calling` `sip-phone` `voice-modulator` `voip-application` `kotlin-compose` `material-design-3` `android-development` `open-source-voip` `telecommunications`
+`android-voip` `voice-changer` `real-time-voice-morphing` `kotlin-android` `jetpack-compose` `freeswitch-integration` `sip-client` `ip-trunking` `linphone-sdk` `voip-calling-app` `voice-effects` `android-calling` `sip-phone` `voice-modulator` `voip-application` `kotlin-compose` `material-design-3` `android-development` `open-source-voip` `telecommunications` `bluetooth-voip` `corporate-network` `nat-traversal` `ice-stun` `tcp-transport`
 
 ---
 
