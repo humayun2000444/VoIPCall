@@ -563,6 +563,9 @@ class LinphoneService : Service() {
     private fun makeCall(number: String, username: String, serverIp: String, serverPort: Int) {
         try {
             Log.d(TAG, "=== STARTING CALL SETUP ===")
+            Log.d(TAG, "Username (From): $username")
+            Log.d(TAG, "Server: $serverIp:$serverPort")
+            Log.d(TAG, "Calling: $number")
 
             // Request audio focus BEFORE making call
             requestAudioFocus()
@@ -575,6 +578,14 @@ class LinphoneService : Service() {
             // Ensure microphone is enabled at core level
             core.isMicEnabled = true
             Log.d(TAG, "Core microphone enabled: ${core.isMicEnabled}")
+
+            // Set the From header (caller identity) for IP trunking
+            val fromAddress = "sip:$username@$serverIp:$serverPort"
+            val identityAddress = core.interpretUrl(fromAddress)
+            if (identityAddress != null) {
+                core.primaryContact = fromAddress
+                Log.d(TAG, "Set From header to: $fromAddress")
+            }
 
             // Create SIP address for destination
             val sipAddress = "sip:$number@$serverIp:$serverPort"
