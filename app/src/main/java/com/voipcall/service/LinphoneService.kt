@@ -35,6 +35,13 @@ class LinphoneService : Service() {
         private const val NOTIFICATION_ID = 1
     }
 
+    private data class PendingCallData(
+        val number: String,
+        val username: String,
+        val serverIp: String,
+        val serverPort: Int
+    )
+
     private lateinit var core: Core
     private var currentVoiceType: VoiceType = VoiceType.NORMAL
     private lateinit var audioManager: AudioManager
@@ -45,6 +52,8 @@ class LinphoneService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var keepAliveRunnable: Runnable? = null
+    private var isCoreReady = false
+    private val pendingCalls = mutableListOf<PendingCallData>()
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
@@ -431,6 +440,21 @@ class LinphoneService : Service() {
             Log.d(TAG, "Linphone core initialized successfully")
             Log.d(TAG, "Microphone enabled: ${core.isMicEnabled}")
             Log.d(TAG, "Available audio devices: ${core.audioDevices.map { it.deviceName }}")
+
+            // Wait for core to be ready (STUN, network, transports need time to initialize)
+            mainHandler.postDelayed({
+                isCoreReady = true
+                Log.d(TAG, "✅ Linphone core is now READY for calls")
+
+                // Process any pending calls
+                if (pendingCalls.isNotEmpty()) {
+                    Log.d(TAG, "Processing ${pendingCalls.size} pending call(s)")
+                    pendingCalls.forEach { pendingCall ->
+                        makeCall(pendingCall.number, pendingCall.username, pendingCall.serverIp, pendingCall.serverPort)
+                    }
+                    pendingCalls.clear()
+                }
+            }, 2000) // Wait 2 seconds for initialization
         } catch (e: Exception) {
             Log.e(TAG, "Error initializing Linphone", e)
         }
@@ -561,6 +585,13 @@ class LinphoneService : Service() {
     }
 
     private fun makeCall(number: String, username: String, serverIp: String, serverPort: Int) {
+        // Check if core is ready
+        if (!isCoreReady) {
+            Log.w(TAG, "⚠️ Linphone core not ready yet, queuing call for later")
+            pendingCalls.add(PendingCallData(number, username, serverIp, serverPort))
+            return
+        }
+
         try {
             Log.d(TAG, "=== STARTING CALL SETUP ===")
             Log.d(TAG, "Username (From): $username")
