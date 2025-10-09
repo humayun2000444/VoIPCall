@@ -4,7 +4,8 @@
       "Bash(.gradlew.bat assembleDebug)",
       "Bash(./gradlew:*)",
       "Bash(./gradlew.bat:*)",
-      "Read(//c/Users/Prototype/Downloads/**)"
+      "Read(//c/Users/Prototype/Downloads/**)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

@@ -34,10 +34,13 @@
 
 ### 🔐 VoIP Authentication & IP Trunking
 - **Direct IP Trunking**: Connect to FreeSWITCH, Asterisk, or any SIP server without registration
+- **Dynamic Port Support**: Connect to any SIP port (5060, 52318, 5080, custom ports)
+- **Correct Caller Identity**: Username properly sent in SIP From header to server
 - **Dual Transport Support**: TCP (primary) and UDP (fallback) for firewall compatibility
+- **Dynamic Local Ports**: Random local port binding for maximum compatibility
 - **NAT Traversal**: ICE enabled with Google STUN server for restrictive networks
 - **Persistent Session Management**: Save username, server IP, and port configurations
-- **Secure Connections**: Support for VoIP server authentication
+- **First Call Reliability**: Core readiness check ensures first call always works
 - **Office WiFi Compatible**: Works through corporate firewalls and restrictive networks
 
 ### 📞 Professional Call Management
@@ -61,10 +64,16 @@ Transform your voice in real-time during active VoIP calls:
 ### 🔊 Advanced Audio Controls & Management
 - **Mute/Unmute Toggle**: One-tap microphone control during calls
 - **Speaker/Earpiece Switching**: Seamless audio routing between speaker and earpiece
+- **Early Bluetooth Routing**: Instant Bluetooth connection for ringback tones (RBT)
+  - Bluetooth audio starts immediately when dialing (not after answer)
+  - Hear ringing through Bluetooth before B party answers
+  - No 2-second delay - connects in milliseconds
+  - Multiple routing points (OutgoingInit, OutgoingProgress, OutgoingRinging, Connected)
 - **Bluetooth Headset Support**: Full mic and speaker support for Bluetooth devices
   - Automatic Bluetooth detection and routing
   - Separate capture (mic) and playback (speaker) device handling
   - SCO (Synchronous Connection-Oriented) audio for high quality
+  - Works with all popular Bluetooth headsets
 - **Echo Cancellation**: Built-in acoustic echo cancellation for crystal-clear audio
 - **Auto Audio Routing**: Automatic detection and switching for headphones and Bluetooth devices
 - **Volume Management**: Independent control of microphone gain and speaker volume
@@ -188,10 +197,23 @@ Or install manually from:
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### APK Download Location
-After successful build, find the installable APK at:
+### APK Download Locations
+After successful build, find the installable APKs at:
+
+**Debug APK** (for development/testing):
 ```
 app/build/outputs/apk/debug/app-debug.apk
+```
+
+**Release APK** (for production/distribution):
+```
+app/build/outputs/apk/release/app-release-unsigned.apk
+```
+
+To build release APK:
+```bash
+./gradlew assembleRelease    # Linux/macOS
+gradlew.bat assembleRelease  # Windows
 ```
 
 ### Alternative Installation Methods
@@ -211,12 +233,30 @@ app/build/outputs/apk/debug/app-debug.apk
    - **Server Port**: SIP signaling port (default: `5060`, can be custom)
 3. **Tap "Connect"** to establish connection
 
-#### Example Configuration
+#### Example Configurations
+
+**Standard Configuration (Port 5060)**:
 ```
 Username: 09646888888
 Server IP: 103.95.96.76
 Server Port: 5060
 ```
+
+**Custom Port Configuration (e.g., FreeSWITCH profiles)**:
+```
+Username: 1003_1006-humu-gmail-com_901
+Server IP: 98.70.40.108
+Server Port: 52318
+```
+
+**Another Custom Port Example**:
+```
+Username: sales_extension_100
+Server IP: 192.168.1.50
+Server Port: 5080
+```
+
+The app supports **any port** - not limited to standard 5060!
 
 ### Compatible VoIP Servers & PBX Systems
 ✅ **FreeSWITCH** - Open-source telephony platform (tested and verified)
@@ -422,7 +462,14 @@ Ensure the following ports are open:
 - ✅ **SCO**: Verify "Bluetooth SCO state: true" in logs
 - ✅ **Permissions**: Ensure BLUETOOTH_CONNECT permission granted (Android 12+)
 - ✅ **Audio Routing**: Check logs for "Audio routed to Bluetooth via Linphone"
+- ✅ **Early Routing**: Bluetooth connects immediately when dialing - hear RBT instantly
 - ✅ **Restart**: Disconnect and reconnect Bluetooth headset
+
+**Problem**: Can't hear ringback tone (RBT) on Bluetooth before answer
+- ✅ **Solution**: This is now fixed! Bluetooth routes immediately when call starts
+- ✅ **Feature**: You'll hear RBT through Bluetooth before B party answers
+- ✅ **Timing**: Audio connects in <1 second, not after answer
+- ✅ **Logs**: Check for "🔵 Early Bluetooth routing for ringback tone" in logs
 
 **Problem**: Echo or feedback during calls
 - ✅ **Solution**: Echo cancellation is enabled by default - reduce speaker volume
@@ -509,10 +556,19 @@ A: Yes, the app works perfectly on mobile data, home WiFi, and office WiFi. TCP 
 A: Current implementation uses unencrypted SIP/RTP. SRTP encryption can be added for production use.
 
 **Q: Does Bluetooth headset work for both mic and speaker?**
-A: Yes! Full Bluetooth support including both microphone capture and speaker playback.
+A: Yes! Full Bluetooth support including both microphone capture and speaker playback. Bluetooth connects instantly when you dial.
+
+**Q: Can I hear ringback tone (RBT) through Bluetooth before the call is answered?**
+A: Yes! Bluetooth audio routes immediately when you start dialing, so you hear the RBT through your Bluetooth headset instantly.
 
 **Q: Why does my voice work after disconnecting Bluetooth?**
 A: If this happens, it indicates the Bluetooth routing was working - the app automatically switches back to phone mic/speaker.
+
+**Q: Why did my first call fail but second call worked?**
+A: This is now fixed! The app waits 2 seconds for core initialization (STUN/ICE/network). First call works every time now.
+
+**Q: Can I use custom SIP ports (not 5060)?**
+A: Yes! The app supports dynamic ports. You can connect to any port like 52318, 5080, or any custom port.
 
 **Q: What networks does the app work on?**
 A: Works on all networks: Office WiFi (with firewall), Home WiFi, Mobile Data (4G/5G). TCP transport ensures compatibility.
@@ -629,12 +685,31 @@ We welcome contributions from the developer community! Here's how you can help:
 
 ## Version History & Changelog
 
-### v1.0.1 (Current Release) - October 2025
-**Major Update: Network & Bluetooth Improvements**
-- ✅ **Bluetooth Support**: Full mic and speaker support for Bluetooth headsets
+### v1.0.2 (Current Release) - October 2025
+**Major Update: Dynamic Port Support & Early Bluetooth Routing**
+- ✅ **Dynamic Port Support**: Connect to any SIP port (not just 5060)
+  - Custom port configuration (e.g., 52318, 5080, etc.)
+  - Random local port binding for maximum compatibility
+  - FreeSWITCH profile support on any port
+- ✅ **Correct Caller Identity**: Username in From header
+  - FreeSWITCH receives correct username in SIP From header
+  - IP trunking authentication improved
+  - Proper dialplan routing on server side
+- ✅ **First Call Reliability**: Core readiness check
+  - 2-second initialization delay for STUN/ICE/network setup
+  - Call queuing if initiated before core ready
+  - Automatic execution of queued calls
+  - First call now works every time
+- ✅ **Early Bluetooth Routing**: Instant RBT on Bluetooth
+  - Bluetooth audio connects immediately when dialing
+  - Hear ringback tone (RBT) through Bluetooth before answer
+  - No 2-second delay - instant connection
+  - Multiple routing points (OutgoingInit, OutgoingProgress, OutgoingRinging)
+- ✅ **Bluetooth Improvements**:
+  - Full mic and speaker support for Bluetooth headsets
   - Automatic Bluetooth detection and SCO routing
   - Separate capture/playback device handling
-  - Works with popular Bluetooth headsets
+  - Works with all popular Bluetooth headsets
 - ✅ **Network Compatibility**: Works on all networks
   - TCP transport priority for corporate firewalls
   - ICE enabled for NAT traversal
@@ -645,14 +720,18 @@ We welcome contributions from the developer community! Here's how you can help:
   - Auto-restart mic if upload bandwidth drops
   - Audio device routing improvements
   - Network change detection and handling
-- ✅ **UI Enhancements**:
-  - Call ended screen with close button
-  - Better dialpad number visibility
-  - Fixed text color issues
 - ✅ **FreeSWITCH Optimization**:
   - RTP port range 16384-32768 (matches FreeSWITCH)
   - Session refresh optimization
   - Better codec negotiation
+
+### v1.0.1 - October 2025
+**Network & Bluetooth Initial Support**
+- ✅ Bluetooth headset support (mic & speaker)
+- ✅ TCP transport for firewalls
+- ✅ ICE/STUN for NAT traversal
+- ✅ Call ended screen improvements
+- ✅ Audio monitoring and recovery
 
 ### v1.0.0 - January 2025
 **Initial Public Release**
