@@ -462,6 +462,15 @@ class LinphoneService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            "REGISTER_ACCOUNT" -> {
+                val username = intent.getStringExtra("username")
+                val password = intent.getStringExtra("password")
+                val serverIp = intent.getStringExtra("serverIp")
+                val serverPort = intent.getIntExtra("serverPort", 5060)
+                if (username != null && password != null && serverIp != null) {
+                    registerAccount(username, password, serverIp, serverPort)
+                }
+            }
             "MAKE_CALL" -> {
                 val number = intent.getStringExtra("number")
                 val username = intent.getStringExtra("username")
@@ -489,6 +498,68 @@ class LinphoneService : Service() {
         return START_STICKY
     }
 
+    private fun registerAccount(username: String, password: String, serverIp: String, serverPort: Int) {
+        try {
+            Log.d(TAG, "=== REGISTERING SIP ACCOUNT ===")
+
+            // Clear any existing accounts
+            core.accountList.forEach { account ->
+                core.removeAccount(account)
+            }
+            core.clearAccounts()
+
+            // Configure transports BEFORE creating account
+            val transports = core.transports
+            transports.tcpPort = -1  // Use random local port for TCP
+            transports.udpPort = -1  // Use random local port for UDP
+            core.transports = transports
+
+            Log.d(TAG, "Transports configured - TCP:random, UDP:random")
+
+            // Create account parameters
+            val accountParams = core.createAccountParams()
+
+            // Create identity address (who you are)
+            val identity = "sip:$username@$serverIp:$serverPort"
+            val identityAddress = core.interpretUrl(identity)
+            accountParams.identityAddress = identityAddress
+
+            // Create server address (where to register)
+            val serverAddr = "sip:$serverIp:$serverPort;transport=tcp"
+            val serverAddress = core.interpretUrl(serverAddr)
+            accountParams.serverAddress = serverAddress
+
+            // Enable registration
+            accountParams.isRegisterEnabled = true
+            accountParams.expires = 3600  // Registration expires in 1 hour
+
+            // Create auth info (credentials)
+            val authInfo = Factory.instance().createAuthInfo(
+                username,  // username
+                null,      // userId (can be null)
+                password,  // password
+                null,      // ha1 (can be null)
+                null,      // realm (can be null, will be determined from server challenge)
+                serverIp   // domain
+            )
+            core.addAuthInfo(authInfo)
+
+            // Create and add account
+            val account = core.createAccount(accountParams)
+            core.addAccount(account)
+            core.defaultAccount = account
+
+            Log.d(TAG, "SIP account created and registered:")
+            Log.d(TAG, "  Identity: $identity")
+            Log.d(TAG, "  Server: $serverAddr")
+            Log.d(TAG, "  Username: $username")
+            Log.d(TAG, "Waiting for registration...")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering account", e)
+        }
+    }
+
     private fun makeCall(number: String, username: String, serverIp: String, serverPort: Int) {
         try {
             Log.d(TAG, "=== STARTING CALL SETUP ===")
@@ -505,30 +576,8 @@ class LinphoneService : Service() {
             core.isMicEnabled = true
             Log.d(TAG, "Core microphone enabled: ${core.isMicEnabled}")
 
-            // Configure transports for IP trunking - TCP priority for office networks
-            val transports = core.transports
-            transports.tcpPort = 5060  // TCP first - works better through firewalls
-            transports.udpPort = 5060  // UDP as fallback
-            core.transports = transports
-
-            Log.d(TAG, "Transports configured - TCP:5060 (priority), UDP:5060 (fallback)")
-
-            // Use server IP in contact to avoid NAT issues
-            core.guessHostname = false
-            core.setUserAgent("VoIPCall", "1.0")
-
-            // Create identity with username from login - use TCP transport
-            val identity = "sip:$username@$serverIp:$serverPort;transport=tcp"
-            val identityAddress = core.interpretUrl(identity)
-
-            if (identityAddress != null) {
-                core.primaryContact = identity
-                Log.d(TAG, "Set identity to: $identity (TCP)")
-            }
-
-            // Create SIP address for destination with transport parameter
-            // Force TCP transport for better compatibility with office networks
-            val sipAddress = "sip:$number@$serverIp:$serverPort;transport=tcp"
+            // Create SIP address for destination
+            val sipAddress = "sip:$number@$serverIp:$serverPort"
             val address = core.interpretUrl(sipAddress)
 
             if (address != null) {

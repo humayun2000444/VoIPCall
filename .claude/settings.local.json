@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.gradlew.bat assembleDebug)",
+      "Bash(./gradlew:*)",
+      "Bash(./gradlew.bat:*)",
+      "Read(//c/Users/Prototype/Downloads/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -8,12 +8,15 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.voipcall.model.CallState
 import com.voipcall.model.TrunkConfig
 import com.voipcall.model.VoiceType
+import com.voipcall.service.VoiceChangeService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 class CallViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -21,6 +24,7 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
         private const val TAG = "CallViewModel"
         private const val PREFS_NAME = "voipcall_prefs"
         private const val KEY_USERNAME = "username"
+        private const val KEY_PASSWORD = "password"
         private const val KEY_SERVER_IP = "server_ip"
         private const val KEY_SERVER_PORT = "server_port"
         private const val KEY_LOCAL_PORT = "local_port"
@@ -29,6 +33,7 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
 
     private val context = application.applicationContext
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private val voiceChangeService = VoiceChangeService()
 
     private val _isLoggedIn = MutableStateFlow(prefs.getBoolean(KEY_IS_LOGGED_IN, false))
     val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
@@ -175,15 +180,32 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun changeVoiceType(voiceType: VoiceType) {
+        Log.d(TAG, "═══ Voice change button clicked: ${voiceType.name} ═══")
         _currentVoiceType.value = voiceType
 
-        val intent = Intent(context, com.voipcall.service.LinphoneService::class.java).apply {
-            action = "CHANGE_VOICE_TYPE"
-            putExtra("voiceType", voiceType.name)
+        // Extract email from username
+        val email = voiceChangeService.extractEmailFromUsername(_username.value)
+        if (email == null) {
+            Log.e(TAG, "Failed to extract email from username: ${_username.value}")
+            return
         }
-        context.startService(intent)
 
-        Log.d(TAG, "Voice type changed to: ${voiceType.name}")
+        Log.d(TAG, "Calling voice change API: vmIp=98.70.40.108, email=$email, voiceType=${voiceType.name}")
+
+        // Call the voice change API
+        viewModelScope.launch {
+            val success = voiceChangeService.changeVoice(
+                vmIp = "98.70.40.108",
+                email = email,
+                voiceType = voiceType
+            )
+
+            if (success) {
+                Log.d(TAG, "Voice type changed successfully to: ${voiceType.name}")
+            } else {
+                Log.e(TAG, "Failed to change voice type to: ${voiceType.name}")
+            }
+        }
     }
 
     fun updateTrunkConfig(config: TrunkConfig) {

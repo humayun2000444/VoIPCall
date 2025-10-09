@@ -109,8 +109,8 @@ fun LoginScreen(
                     Text(
                         text = "• Enter your username\n" +
                                 "• Enter the VoIP server IP address\n" +
-                                "• Enter the server port (default: 5060)\n" +
-                                "• Click Connect to start making calls",
+                                "• Enter the server port (default: 5060 or custom like 52318)\n" +
+                                "• Click Connect to start IP trunk calling",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
