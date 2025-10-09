@@ -179,6 +179,13 @@ class LinphoneService : Service() {
 
             // Handle microphone settings based on call state
             when (state) {
+                Call.State.OutgoingInit, Call.State.OutgoingProgress, Call.State.OutgoingRinging -> {
+                    // Start Bluetooth audio EARLY (during ringing) so user can hear RBT
+                    if (isBluetoothConnected) {
+                        Log.d(TAG, "🔵 Early Bluetooth routing for ringback tone (state: $state)")
+                        routeAudioToBluetooth()
+                    }
+                }
                 Call.State.Connected -> {
                     // Request audio focus for VoIP
                     requestAudioFocus()
@@ -189,6 +196,12 @@ class LinphoneService : Service() {
                     // Ensure microphone is enabled when call connects
                     call.microphoneMuted = false
                     core.isMicEnabled = true
+
+                    // Ensure Bluetooth is still routed (in case it wasn't connected during OutgoingInit)
+                    if (isBluetoothConnected) {
+                        Log.d(TAG, "🔵 Ensuring Bluetooth audio on Connect")
+                        routeAudioToBluetooth()
+                    }
 
                     Log.d(TAG, "Call connected - Mic muted: ${call.microphoneMuted}")
                     Log.d(TAG, "Core mic enabled: ${core.isMicEnabled}")
@@ -660,6 +673,12 @@ class LinphoneService : Service() {
                         Log.d(TAG, "Audio direction: ${params.audioDirection}")
                         Log.d(TAG, "Early media: ${params.isEarlyMediaSendingEnabled}")
                         Log.d(TAG, "Audio mode: ${audioManager.mode}")
+
+                        // IMMEDIATELY route to Bluetooth if connected (for RBT/ringing tone)
+                        if (isBluetoothConnected) {
+                            Log.d(TAG, "🔵 Immediately routing to Bluetooth for early audio (RBT)")
+                            routeAudioToBluetooth()
+                        }
 
                         // Start aggressive microphone monitoring
                         startAggressiveMicCheck(call)
