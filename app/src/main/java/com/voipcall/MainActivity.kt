@@ -90,6 +90,7 @@ fun VoIPCallApp(viewModel: CallViewModel) {
     val isMuted by viewModel.isMuted.collectAsState()
     val isSpeakerOn by viewModel.isSpeakerOn.collectAsState()
     val currentVoiceType by viewModel.currentVoiceType.collectAsState()
+    val callDuration by viewModel.callDuration.collectAsState()
     val trunkConfig by viewModel.trunkConfig.collectAsState()
     val username by viewModel.username.collectAsState()
 
@@ -130,17 +131,24 @@ fun VoIPCallApp(viewModel: CallViewModel) {
             )
         }
         callState == CallState.ENDED -> {
+            android.util.Log.d("VoIPCallApp", "╔════════════════════════════════════════╗")
+            android.util.Log.d("VoIPCallApp", "║  RENDERING CALL ENDED SCREEN           ║")
+            android.util.Log.d("VoIPCallApp", "╚════════════════════════════════════════╝")
+
             // Automatically navigate back to dial screen after 2 seconds
             LaunchedEffect(Unit) {
-                android.util.Log.d("VoIPCallApp", "Call ended - will auto-navigate to dial screen in 2 seconds")
+                android.util.Log.d("VoIPCallApp", "⏰ Auto-navigation triggered - will reset to dial screen in 2 seconds")
                 kotlinx.coroutines.delay(2000)
+                android.util.Log.d("VoIPCallApp", "🔄 Auto-navigation executing - calling resetCallState()")
                 viewModel.resetCallState()
+                android.util.Log.d("VoIPCallApp", "✅ Auto-navigation complete - should now show dial screen")
             }
 
             // Show call ended screen briefly
             CallScreen(
                 phoneNumber = phoneNumber,
                 callState = callState,
+                callDuration = callDuration,
                 isMuted = isMuted,
                 isSpeakerOn = isSpeakerOn,
                 currentVoiceType = currentVoiceType,
@@ -157,6 +165,7 @@ fun VoIPCallApp(viewModel: CallViewModel) {
             CallScreen(
                 phoneNumber = phoneNumber,
                 callState = callState,
+                callDuration = callDuration,
                 isMuted = isMuted,
                 isSpeakerOn = isSpeakerOn,
                 currentVoiceType = currentVoiceType,

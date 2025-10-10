@@ -52,6 +52,7 @@ class LinphoneService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private val mainHandler = Handler(Looper.getMainLooper())
     private var keepAliveRunnable: Runnable? = null
+    private var durationUpdateRunnable: Runnable? = null
     private var isCoreReady = false
     private val pendingCalls = mutableListOf<PendingCallData>()
 
@@ -226,6 +227,9 @@ class LinphoneService : Service() {
                     // CRITICAL: Ensure audio mode is set correctly FIRST
                     audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
 
+                    // Start broadcasting call duration
+                    startDurationUpdates(call)
+
                     // Force audio routing to be stable
                     try {
                         if (isBluetoothConnected) {
@@ -320,6 +324,9 @@ class LinphoneService : Service() {
                     Log.e(TAG, "║  CALL ENDED - CLEANING UP              ║")
                     Log.e(TAG, "╚════════════════════════════════════════╝")
 
+                    // Stop duration updates
+                    stopDurationUpdates()
+
                     // Stop keep-alive
                     stopKeepAlive()
 
@@ -340,13 +347,25 @@ class LinphoneService : Service() {
                 else -> {}
             }
 
-            // Send broadcast with call state
+            // Send broadcast with call state (EXPLICIT for Android 8.0+)
             val intent = Intent("com.voipcall.CALL_STATE_CHANGED")
+            intent.setPackage(packageName)  // Make it explicit by setting package name
             val stateString = state.toString()
             intent.putExtra("state", stateString)
             intent.putExtra("message", message)
-            Log.d(TAG, "📡 Broadcasting call state: '$stateString' to UI")
+
+            Log.d(TAG, "╔═══════════════════════════════════════╗")
+            Log.d(TAG, "║  BROADCASTING CALL STATE TO UI       ║")
+            Log.d(TAG, "╠═══════════════════════════════════════╣")
+            Log.d(TAG, "║  Action: com.voipcall.CALL_STATE_CHANGED")
+            Log.d(TAG, "║  Package: $packageName (explicit)")
+            Log.d(TAG, "║  State: $stateString")
+            Log.d(TAG, "║  Message: $message")
+            Log.d(TAG, "╚═══════════════════════════════════════╝")
+
             sendBroadcast(intent)
+
+            Log.d(TAG, "✅ Broadcast sent successfully")
         }
 
         override fun onRegistrationStateChanged(
@@ -747,6 +766,7 @@ class LinphoneService : Service() {
             }
 
             val intent = Intent("com.voipcall.MUTE_CHANGED")
+            intent.setPackage(packageName)  // Explicit broadcast for Android 8.0+
             intent.putExtra("muted", !core.isMicEnabled)
             sendBroadcast(intent)
 
@@ -773,6 +793,7 @@ class LinphoneService : Service() {
                 core.currentCall?.outputAudioDevice = it
 
                 val intent = Intent("com.voipcall.SPEAKER_CHANGED")
+                intent.setPackage(packageName)  // Explicit broadcast for Android 8.0+
                 intent.putExtra("speaker", !isSpeaker)
                 sendBroadcast(intent)
 
@@ -1259,6 +1280,41 @@ class LinphoneService : Service() {
 
         mainHandler.postDelayed(aggressiveCheck, 1000)  // Start after 1 second
         Log.d(TAG, "Started aggressive mic monitoring")
+    }
+
+    private fun startDurationUpdates(call: Call) {
+        stopDurationUpdates()  // Clear any existing duration updates
+
+        durationUpdateRunnable = object : Runnable {
+            override fun run() {
+                try {
+                    // Get duration from Linphone Call object (in seconds)
+                    val duration = call.duration
+
+                    // Broadcast duration to UI
+                    val intent = Intent("com.voipcall.CALL_DURATION_UPDATE")
+                    intent.setPackage(packageName)  // Explicit broadcast for Android 8.0+
+                    intent.putExtra("duration", duration)
+                    sendBroadcast(intent)
+
+                    // Schedule next update in 1 second
+                    mainHandler.postDelayed(this, 1000)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error updating call duration", e)
+                }
+            }
+        }
+
+        mainHandler.post(durationUpdateRunnable!!)
+        Log.d(TAG, "Started call duration updates")
+    }
+
+    private fun stopDurationUpdates() {
+        durationUpdateRunnable?.let {
+            mainHandler.removeCallbacks(it)
+            durationUpdateRunnable = null
+            Log.d(TAG, "Stopped call duration updates")
+        }
     }
 
     override fun onDestroy() {

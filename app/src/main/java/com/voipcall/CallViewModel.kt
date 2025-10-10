@@ -56,6 +56,9 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentVoiceType = MutableStateFlow(VoiceType.NORMAL)
     val currentVoiceType: StateFlow<VoiceType> = _currentVoiceType.asStateFlow()
 
+    private val _callDuration = MutableStateFlow(0)
+    val callDuration: StateFlow<Int> = _callDuration.asStateFlow()
+
     private val _trunkConfig = MutableStateFlow(loadTrunkConfig())
     val trunkConfig: StateFlow<TrunkConfig> = _trunkConfig.asStateFlow()
 
@@ -81,8 +84,11 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
                         }
                         "End", "Released" -> {
                             Log.d(TAG, "  → Mapping to ENDED")
+                            Log.d(TAG, "  → Resetting mute and speaker states")
                             _isMuted.value = false
                             _isSpeakerOn.value = false
+                            _callDuration.value = 0
+                            Log.d(TAG, "  → Will trigger auto-navigation in UI")
                             CallState.ENDED
                         }
                         "Error" -> {
@@ -104,6 +110,10 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
                 "com.voipcall.SPEAKER_CHANGED" -> {
                     _isSpeakerOn.value = intent.getBooleanExtra("speaker", false)
                 }
+                "com.voipcall.CALL_DURATION_UPDATE" -> {
+                    val duration = intent.getIntExtra("duration", 0)
+                    _callDuration.value = duration
+                }
             }
         }
     }
@@ -120,6 +130,7 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
             addAction("com.voipcall.CALL_STATE_CHANGED")
             addAction("com.voipcall.MUTE_CHANGED")
             addAction("com.voipcall.SPEAKER_CHANGED")
+            addAction("com.voipcall.CALL_DURATION_UPDATE")
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -287,11 +298,17 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resetCallState() {
+        Log.d(TAG, "════════════════════════════════════════")
+        Log.d(TAG, "resetCallState() called - navigating to dial screen")
+        Log.d(TAG, "Current state: ${_callState.value} → IDLE")
         _callState.value = CallState.IDLE
         _phoneNumber.value = ""
         _isMuted.value = false
         _isSpeakerOn.value = false
         _currentVoiceType.value = VoiceType.NORMAL
+        _callDuration.value = 0
+        Log.d(TAG, "State reset complete - should show dial screen now")
+        Log.d(TAG, "════════════════════════════════════════")
     }
 
     override fun onCleared() {

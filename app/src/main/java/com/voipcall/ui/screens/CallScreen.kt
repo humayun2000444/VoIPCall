@@ -25,6 +25,7 @@ import com.voipcall.ui.theme.Red
 fun CallScreen(
     phoneNumber: String,
     callState: CallState,
+    callDuration: Int,
     isMuted: Boolean,
     isSpeakerOn: Boolean,
     currentVoiceType: VoiceType,
@@ -73,17 +74,7 @@ fun CallScreen(
             Spacer(modifier = Modifier.weight(1f))
 
             // Call duration (show when connected)
-            if (callState == CallState.CONNECTED) {
-                var callDuration by remember { mutableStateOf(0) }
-
-                // Start counting when connected
-                LaunchedEffect(Unit) {
-                    while (true) {
-                        kotlinx.coroutines.delay(1000)
-                        callDuration++
-                    }
-                }
-
+            if (callState == CallState.CONNECTED && callDuration > 0) {
                 Text(
                     text = formatDuration(callDuration),
                     fontSize = 18.sp,
