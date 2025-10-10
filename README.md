@@ -46,9 +46,16 @@
 ### 📞 Professional Call Management
 - **Smart Dial Pad**: Full numeric keypad (0-9, *, #) with backspace functionality
 - **Outgoing VoIP Calls**: Direct IP-to-IP calling via FreeSWITCH/SIP protocol
-- **Real-Time Call Timer**: Displays accurate call duration from connection to hangup
+- **Real-Time Call Timer**: Accurate call duration display using Linphone's native tracking
+  - Updates every second during active call
+  - Format: MM:SS (minutes:seconds) or HH:MM:SS for longer calls
+  - Persists across state changes for reliability
 - **Call State Monitoring**: Live status tracking (Calling, Ringing, Connected, Ended, Error)
-- **Call End Handling**: Displays "Call Ended" screen with close button for clean navigation
+- **Auto-Navigation**: Automatically returns to dial screen 2 seconds after call ends
+  - Smooth UX - no manual navigation needed
+  - "Call Ended" status displayed briefly
+  - Manual close button still available
+- **Reliable State Management**: Explicit broadcasts for Android 8.0+ compatibility
 - **One-Touch Dialing**: Quick call initiation with a single tap
 
 ### 🎤 Real-Time Voice Morphing & Voice Changer
@@ -529,11 +536,17 @@ Ensure the following ports are open:
 - ✅ **Optimization**: Enable battery optimization in Android settings if not calling frequently
 - ✅ **Bluetooth**: Bluetooth SCO is stopped when call ends to save battery
 
-**Problem**: Call ended screen not showing close button
-- ✅ **State**: Check logs for "Call state changed to: ENDED"
-- ✅ **UI**: Close button (X icon) should appear automatically
-- ✅ **Navigation**: Clicking close button returns to dial screen
-- ✅ **Auto**: System handles navigation when call ends
+**Problem**: Call duration not showing during active call
+- ✅ **Solution**: Duration displays automatically when call is in Connected state
+- ✅ **Format**: Shows as MM:SS (minutes:seconds) below phone number
+- ✅ **Update**: Counter updates every second
+- ✅ **Check**: Ensure call state shows "Connected" (not "Calling...")
+
+**Problem**: App doesn't auto-navigate after call ends
+- ✅ **Solution**: This is now automatic - wait 2 seconds after "Call Ended" appears
+- ✅ **Manual**: Close button (X icon) still available for immediate navigation
+- ✅ **Logs**: Check for "Auto-navigation executing" in logs
+- ✅ **Compatibility**: Requires Android 8.0+ with explicit broadcast support
 
 ### Frequently Asked Questions (FAQ)
 
@@ -572,6 +585,15 @@ A: Yes! The app supports dynamic ports. You can connect to any port like 52318, 
 
 **Q: What networks does the app work on?**
 A: Works on all networks: Office WiFi (with firewall), Home WiFi, Mobile Data (4G/5G). TCP transport ensures compatibility.
+
+**Q: Does the call duration timer show during active calls?**
+A: Yes! The timer shows as MM:SS format and updates every second. It uses Linphone's native duration tracking for accuracy.
+
+**Q: Do I need to manually close the call screen after calls end?**
+A: No! The app automatically navigates back to the dial screen 2 seconds after the call ends. You can also manually tap the close button for immediate navigation.
+
+**Q: Why weren't my broadcasts working on Android 8.0+?**
+A: Android 8.0+ requires explicit broadcasts (with package name). This has been fixed - all state updates now work reliably on modern Android versions.
 
 ## Development
 
@@ -685,7 +707,30 @@ We welcome contributions from the developer community! Here's how you can help:
 
 ## Version History & Changelog
 
-### v1.0.2 (Current Release) - October 2025
+### v1.0.3 (Current Release) - October 2025
+**Critical Update: Call Duration & Auto-Navigation**
+- ✅ **Call Duration Display**: Real-time call timer
+  - Uses Linphone's native `call.duration` property
+  - Updates every second during active call
+  - Accurate duration tracking from answer to hangup
+  - Format: MM:SS or HH:MM:SS for longer calls
+- ✅ **Auto-Navigation on Call End**: Improved UX
+  - Automatically returns to dial screen after call ends
+  - 2-second delay showing "Call Ended" status
+  - No manual close button required (but still available)
+  - Smooth transition back to dial pad
+- ✅ **Broadcast Communication Fix**: Android 8.0+ compatibility
+  - Explicit broadcasts for reliable service-to-UI communication
+  - Fixed broadcast receiver not receiving state updates
+  - All broadcasts now work on Android 8.0+ (API 26+)
+  - Includes: call state, duration, mute, speaker changes
+- ✅ **Call State Management**: Enhanced reliability
+  - Proper mapping of End/Released states to ENDED
+  - Call state broadcasts with package name (explicit)
+  - Duration resets properly between calls
+  - No stuck call screens
+
+### v1.0.2 - October 2025
 **Major Update: Dynamic Port Support & Early Bluetooth Routing**
 - ✅ **Dynamic Port Support**: Connect to any SIP port (not just 5060)
   - Custom port configuration (e.g., 52318, 5080, etc.)
