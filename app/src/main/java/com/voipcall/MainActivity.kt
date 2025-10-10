@@ -130,7 +130,14 @@ fun VoIPCallApp(viewModel: CallViewModel) {
             )
         }
         callState == CallState.ENDED -> {
-            // Show call ended screen with close button
+            // Automatically navigate back to dial screen after 2 seconds
+            LaunchedEffect(Unit) {
+                android.util.Log.d("VoIPCallApp", "Call ended - will auto-navigate to dial screen in 2 seconds")
+                kotlinx.coroutines.delay(2000)
+                viewModel.resetCallState()
+            }
+
+            // Show call ended screen briefly
             CallScreen(
                 phoneNumber = phoneNumber,
                 callState = callState,
@@ -138,7 +145,7 @@ fun VoIPCallApp(viewModel: CallViewModel) {
                 isSpeakerOn = isSpeakerOn,
                 currentVoiceType = currentVoiceType,
                 onHangupClick = {
-                    // Close button clicked - go back to dial screen
+                    // Close button clicked - go back to dial screen immediately
                     viewModel.resetCallState()
                 },
                 onMuteClick = { viewModel.toggleMute() },

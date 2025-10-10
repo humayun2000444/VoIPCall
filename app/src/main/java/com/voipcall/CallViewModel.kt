@@ -64,21 +64,33 @@ class CallViewModel(application: Application) : AndroidViewModel(application) {
             when (intent?.action) {
                 "com.voipcall.CALL_STATE_CHANGED" -> {
                     val state = intent.getStringExtra("state")
-                    Log.d(TAG, "Received call state from service: $state")
+                    Log.d(TAG, "📱 Received call state from service: '$state'")
 
                     val newState = when (state) {
-                        "OutgoingInit", "OutgoingProgress", "OutgoingRinging" -> CallState.OUTGOING
-                        "IncomingReceived", "IncomingEarlyMedia" -> CallState.INCOMING
-                        "Connected", "StreamsRunning" -> CallState.CONNECTED
+                        "OutgoingInit", "OutgoingProgress", "OutgoingRinging" -> {
+                            Log.d(TAG, "  → Mapping to OUTGOING")
+                            CallState.OUTGOING
+                        }
+                        "IncomingReceived", "IncomingEarlyMedia" -> {
+                            Log.d(TAG, "  → Mapping to INCOMING")
+                            CallState.INCOMING
+                        }
+                        "Connected", "StreamsRunning" -> {
+                            Log.d(TAG, "  → Mapping to CONNECTED ✅")
+                            CallState.CONNECTED
+                        }
                         "End", "Released" -> {
-                            Log.d(TAG, "Call ended - setting state to ENDED")
+                            Log.d(TAG, "  → Mapping to ENDED")
                             _isMuted.value = false
                             _isSpeakerOn.value = false
                             CallState.ENDED
                         }
-                        "Error" -> CallState.ERROR
+                        "Error" -> {
+                            Log.d(TAG, "  → Mapping to ERROR")
+                            CallState.ERROR
+                        }
                         else -> {
-                            Log.w(TAG, "Unknown call state: $state, keeping current state")
+                            Log.w(TAG, "  → ⚠️ UNKNOWN state '$state', keeping current state: ${_callState.value}")
                             _callState.value
                         }
                     }

@@ -316,20 +316,36 @@ class LinphoneService : Service() {
                     }, 2000)
                 }
                 Call.State.End, Call.State.Released, Call.State.Error -> {
+                    Log.e(TAG, "╔════════════════════════════════════════╗")
+                    Log.e(TAG, "║  CALL ENDED - CLEANING UP              ║")
+                    Log.e(TAG, "╚════════════════════════════════════════╝")
+
                     // Stop keep-alive
                     stopKeepAlive()
+
+                    // Stop Bluetooth SCO
+                    if (isBluetoothConnected) {
+                        stopBluetoothSco()
+                    }
 
                     // Release audio focus and restore audio mode
                     releaseAudioFocus()
                     restoreAudioMode()
+
+                    // Ensure call is terminated
+                    if (state == Call.State.End) {
+                        Log.d(TAG, "Remote party hung up - call ended")
+                    }
                 }
                 else -> {}
             }
 
             // Send broadcast with call state
             val intent = Intent("com.voipcall.CALL_STATE_CHANGED")
-            intent.putExtra("state", state.toString())
+            val stateString = state.toString()
+            intent.putExtra("state", stateString)
             intent.putExtra("message", message)
+            Log.d(TAG, "📡 Broadcasting call state: '$stateString' to UI")
             sendBroadcast(intent)
         }
 
@@ -421,31 +437,33 @@ class LinphoneService : Service() {
             // Set audio port range for better NAT traversal
             core.setAudioPort(-1)  // Use random port
 
-            // Configure NAT policy for restrictive networks (office WiFi)
+            // Configure NAT policy - DISABLE ICE/STUN for faster connection
+            // For IP trunking (direct calling), we don't need ICE negotiation
             val natPolicy = core.createNatPolicy()
 
-            // Enable STUN for NAT traversal - using Google's public STUN server
-            natPolicy?.isStunEnabled = true
-            natPolicy?.stunServer = "stun.l.google.com:19302"
+            // DISABLE STUN to prevent 15-20 second delay
+            natPolicy?.isStunEnabled = false
+            natPolicy?.stunServer = null
 
-            // Enable ICE for better NAT traversal in restrictive networks
-            natPolicy?.isIceEnabled = true
+            // DISABLE ICE for faster direct connection (was causing 19 sec delay)
+            natPolicy?.isIceEnabled = false
             natPolicy?.isTurnEnabled = false
             natPolicy?.isUpnpEnabled = false
 
             core.natPolicy = natPolicy
 
             // Enable SIP keepalive to maintain NAT bindings (critical for office WiFi)
-            core.sipTransportTimeout = 30000  // 30 seconds timeout
+            core.sipTransportTimeout = 64000  // 64 seconds timeout
 
-            // Set session timer for keep-alive (refresh every 30 seconds for restrictive networks)
-            core.incTimeout = 30
+            // Set session timer for keep-alive - DISABLE to prevent auto-hangup
+            // incTimeout controls incoming call ringing timeout, set to 0 to disable
+            core.incTimeout = 0  // Disable automatic timeout (was causing 22-30 sec disconnects)
 
-            Log.d(TAG, "NAT policy configured for restrictive networks")
-            Log.d(TAG, "STUN server: stun.l.google.com:19302 (Google)")
-            Log.d(TAG, "ICE enabled for NAT traversal")
-            Log.d(TAG, "SIP timeout: 30s, session refresh: 30s")
-            Log.d(TAG, "TCP transport forced for office WiFi compatibility")
+            Log.d(TAG, "NAT policy configured for FAST direct connection")
+            Log.d(TAG, "STUN: DISABLED (direct IP calling - no delay)")
+            Log.d(TAG, "ICE: DISABLED (IP trunking - instant connection)")
+            Log.d(TAG, "SIP timeout: 64s, session auto-hangup: DISABLED")
+            Log.d(TAG, "TCP transport for office WiFi compatibility")
 
             // Start core
             core.start()
